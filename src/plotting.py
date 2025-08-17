@@ -12,13 +12,12 @@ def generate_plot_videos(
     aligned_signal: np.ndarray,
     ratio: float,
     output_dir: str | Path,
+    mode: str = "grid",  # "separate", "combine", "grid"
+    grid: Optional[tuple[int, int]] = None,
     col_names: Optional[list[str]] = None,
     ylim: Optional[tuple[float, float]] = None,
     left: int = 250,
     right: int = 250,
-    separate_videos: bool = False,
-    combine_plots: bool = False,
-    grid: Optional[tuple[int, int]] = (1, 1),
     video_fps: float = 30.0,
     plot_size: tuple[int, int] = (1280, 720),
     show_legend: bool = True,
@@ -33,13 +32,14 @@ def generate_plot_videos(
         - aligned_signal: 1D/2D array of aligned signal values
         - ratio: ratio of signal sampling rate to video frame rate
         - output_dir: directory to save the output video(s)
+        - mode: one of 'separate' (one video per channel), 'combine' (all channels in one plot), or 'grid' (grid of subplots)
+        - grid: tuple specifying the grid layout (rows, cols) for subplots when not combining plots, must be large enough to hold all channels
         - col_names: optional list of column names for the signal channels
         - ylim: optional tuple specifying y-axis limits for the plots. If None, auto-scale based on data.
         - left: number of signals to show before the current frame
         - right: number of signals to show after the current frame
         - separate_videos: if True, generate separate video for each channel
         - combine_plots: if True, combine all channels into a single plot, with different lines for legends
-        - grid: tuple specifying the grid layout (rows, cols) for subplots when not combining plots, must be large enough to hold all channels
         - video_fps: frames per second for the output video(s)
         - plot_size: size of the output video frame (width, height)
         - show_legend: if True, show legend on the plots
@@ -52,9 +52,6 @@ def generate_plot_videos(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    if separate_videos and combine_plots:
-        raise ValueError("separate_videos and combine_plots cannot both be True.")
 
     sig = np.asarray(aligned_signal)
     if sig.ndim == 1:
@@ -79,9 +76,9 @@ def generate_plot_videos(
     global_ylim = _global_ylim(sig, ylim)
 
     # Heads-up for options we haven't implemented in renderers yet
-    if show_legend and not combine_plots:
+    if show_legend and mode != "combine":
         warnings.warn(
-            "show_legend is only meaningful for 'combine_plots=True'. Ignoring.",
+            "show_legend is only meaningful for 'mode=combine'. Ignoring.",
             RuntimeWarning,
         )
     if show_values:
@@ -90,55 +87,54 @@ def generate_plot_videos(
         )
 
     # Dispatch to the chosen renderer
-    if separate_videos:
-        # One file per channel
-        for c in range(C):
-            out = output_dir / f"{col_names[c]}_plot"
-            # alpha=False by default; change to True if you want transparent .webm
-            render_one_channel(
-                signal=sig[:, c],
+    match mode:
+        case "separate":
+            for c in range(C):
+                out = output_dir / f"{col_names[c]}_plot"
+                # alpha=False by default; change to True if you want transparent .webm
+                render_one_channel(
+                    signal=sig[:, c],
+                    out_path=out,
+                    left=left,
+                    right=right,
+                    fps=plot_fps,
+                    size=plot_size,
+                    ylim=global_ylim,  # or None if you want per-channel limits
+                    title=col_names[c],
+                    alpha=False,
+                )
+            return True
+        case "combine":
+            out = output_dir / "signals_plot_combined"
+            render_all_channels(
+                signals=sig,
                 out_path=out,
                 left=left,
                 right=right,
                 fps=plot_fps,
                 size=plot_size,
-                ylim=global_ylim,  # or None if you want per-channel limits
-                title=col_names[c],
-                alpha=False,
+                col_names=col_names if show_legend else None,
+                ylim=global_ylim,
+                alpha=False,  # set True to get transparent .webm
             )
-        return True
-
-    if combine_plots:
-        out = output_dir / "signals_plot_combined"
-        render_all_channels(
-            signals=sig,
-            out_path=out,
-            left=left,
-            right=right,
-            fps=plot_fps,
-            size=plot_size,
-            col_names=col_names if show_legend else None,
-            ylim=global_ylim,
-            alpha=False,  # set True to get transparent .webm
-        )
-        return True
-
-    # Grid of subplots
-    rows, cols = grid or (1, 1)
-    if rows * cols < C:
-        raise ValueError(f"grid {grid} too small for {C} channels.")
-
-    out = output_dir / "signals_plot_grid"
-    render_grid(
-        signals=sig,
-        out_path=out,
-        left=left,
-        right=right,
-        fps=plot_fps,
-        grid=(rows, cols),
-        size=plot_size,
-        col_names=col_names,
-        ylim=global_ylim,
-        alpha=False,  # set True to get transparent .webm
-    )
-    return True
+            return True
+        case "grid":
+            if grid is None:
+                warnings.warn(
+                    "grid not specified for 'grid' mode; automatically determining layout.",
+                    RuntimeWarning,
+                )
+            out = output_dir / "signals_plot_grid"
+            render_grid(
+                signals=sig,
+                out_path=out,
+                left=left,
+                right=right,
+                fps=plot_fps,
+                grid=grid,
+                size=plot_size,
+                col_names=col_names,
+                ylim=global_ylim,
+                alpha=False,  # set True to get transparent .webm
+            )
+            return True
