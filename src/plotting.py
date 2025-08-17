@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 from typing import Tuple, Optional
 from src.utils import _global_ylim
-from src.backends.mpl import render_one_channel, render_all_channels
+from src.backends.mpl import render_one_channel, render_all_channels, render_grid
 
 
 def generate_plot_videos(
@@ -136,7 +136,7 @@ def generate_plot_videos(
         right=right,
         fps=plot_fps,
         grid=(rows, cols),
-        base_size=plot_size,
+        size=plot_size,
         col_names=col_names,
         ylim=global_ylim,
         alpha=False,  # set True to get transparent .webm

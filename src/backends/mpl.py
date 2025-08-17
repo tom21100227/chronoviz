@@ -78,7 +78,6 @@ def render_one_channel(
         raise ValueError("signal is empty")
 
     if ylim is not None:
-        # original_sig = sig.copy() # leave a copy here for if we decided to display true values later
         clamp_nan_2d(sig, ylim[0], ylim[1])
 
     # Figure/canvas setup to match exact pixel size
@@ -286,6 +285,151 @@ def render_all_channels(
             for ln in lines:
                 ax.draw_artist(ln)
             fig.canvas.blit(ax.bbox)
+
+            # Write frame
+            if USE_RGB24:
+                # ARGB -> RGB (fast copy); then write 3B/px
+                argb = np.frombuffer(
+                    fig.canvas.tostring_argb(), dtype=np.uint8
+                ).reshape(H, W, 4)
+                rgb[...] = argb[:, :, 1:4]
+                writer.write_frame(memoryview(rgb))
+            else:
+                writer.write_frame(memoryview(fig.canvas.buffer_rgba()))
+    finally:
+        plt.close(fig)
+        final_path = writer.close()
+
+    return final_path
+
+
+def render_grid(
+    signals: np.ndarray,
+    out_path: str | Path,
+    left: int,
+    right: int,
+    fps: float,
+    grid: Tuple[int, int] | None,
+    size: tuple[int, int],
+    ylim: tuple[float, float] | None = None,
+    col_names: List[str] | None = None,
+    alpha: bool = False,
+    writer: FrameWriter | None = None,
+) -> Path:
+    """
+    Grid-mode: each channel in its own subplot, streamed to FFmpeg.
+    """
+    sig = np.asarray(signals, dtype=np.float32)
+    if sig.ndim == 1:
+        sig = sig[:, None]
+    N, C = sig.shape
+    if N == 0:
+        raise ValueError("signal is empty")
+
+    if (col_names is None) or (len(col_names) != C):
+        col_names = [f"ch{c}" for c in range(C)]
+
+    # Determine grid layout
+    if grid is None:
+        # Auto-determine grid: try to make it roughly square
+        rows = int(np.ceil(np.sqrt(C)))
+        cols = int(np.ceil(C / rows))
+        grid = (rows, cols)
+    else:
+        rows, cols = grid
+        if rows * cols < C:
+            raise ValueError(f"Grid {grid} too small for {C} channels")
+
+    if ylim is not None:
+        clamp_nan_2d(sig, ylim[0], ylim[1])
+
+    # Figure/canvas setup to match exact pixel size
+    W, H = int(size[0]), int(size[1])
+    dpi = 100
+    figsize = (W / dpi, H / dpi)
+    fig, axes = plt.subplots(rows, cols, figsize=figsize, dpi=dpi)
+
+    # Handle single subplot case
+    if rows == 1 and cols == 1:
+        axes = [axes]
+    elif rows == 1 or cols == 1:
+        axes = axes.flatten()
+    else:
+        axes = axes.flatten()
+
+    # Shared x for all channels
+    x = np.arange(-left, right + 1, dtype=np.float32)
+
+    # Lines for each subplot (animated for blitting)
+    lines: list[plt.Line2D] = []
+    for c in range(C):
+        ax = axes[c]
+        _lightweight_axes(ax)
+        ax.set_facecolor("white")
+        for spine in ax.spines.values():
+            spine.set_linewidth(1)
+
+        (line,) = ax.plot(
+            x,
+            np.full_like(x, np.nan),
+            lw=1.2,
+            antialiased=True,
+            solid_joinstyle="bevel",
+            solid_capstyle="butt",
+            animated=True,
+        )
+        lines.append(line)
+
+        # Set limits for each subplot
+        ylo, yhi = _compute_ylim(sig[:, c : c + 1], ylim)
+        ax.set_xlim(-left, right)
+        ax.set_ylim(ylo, yhi)
+        ax.set_autoscalex_on(False)
+        ax.set_autoscaley_on(False)
+
+        # Cursor at t=0 for each subplot
+        ax.axvline(0.0, lw=0.8, ls="--", color="0.4")
+
+        # Title for each subplot
+        ax.set_title(col_names[c], fontsize=8, pad=2)
+
+    # Hide unused subplots
+    for c in range(C, len(axes)):
+        axes[c].set_visible(False)
+
+    fig.tight_layout(pad=0.5)
+
+    # First draw + cache background
+    fig.canvas.draw()
+    background = fig.canvas.copy_from_bbox(fig.bbox)
+
+    # Per-channel window buffers (prealloc) and warm-up JIT
+    L = left + right + 1
+    ywin = np.empty((C, L), dtype=np.float32)
+    for c in range(C):
+        fill_window(sig[:, c], 0, left, right, ywin[c])
+
+    # Create writer if not provided
+    if writer is None:
+        writer = create_ffmpeg_writer(
+            Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24
+        )
+
+    # Optional buffer for rgb24 path
+    rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
+
+    try:
+        for i in range(N):
+            # Update all channel windows and lines
+            for c in range(C):
+                fill_window(sig[:, c], i, left, right, ywin[c])
+                lines[c].set_ydata(ywin[c])
+
+            # Blit: restore cached bg, draw all lines, blit once
+            fig.canvas.restore_region(background)
+            for c in range(C):
+                axes[c].draw_artist(lines[c])
+            fig.canvas.blit(fig.bbox)
 
             # Write frame
             if USE_RGB24:

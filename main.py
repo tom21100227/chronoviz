@@ -29,7 +29,8 @@ def main():
         col_names=["track0", "track1"],
         video_fps=video_fps,
         separate_videos=False,
-        combine_plots=True,
+        combine_plots=False,
+        grid=(2,1),
         # ylim=(0, 20),
         plot_size=(640, 512),
     )
