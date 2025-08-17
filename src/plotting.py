@@ -1,3 +1,7 @@
+"""
+Module for generating sliding-window plot videos from aligned signals.
+"""
+
 import numpy as np
 import pandas as pd
 import pathlib, warnings, os, shutil, subprocess
