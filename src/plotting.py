@@ -7,6 +7,7 @@ from typing import Tuple, Optional
 from src.utils import _global_ylim
 from src.backends.mpl import render_one_channel, render_all_channels
 
+
 def generate_plot_videos(
     aligned_signal: np.ndarray,
     ratio: float,
@@ -70,18 +71,23 @@ def generate_plot_videos(
     plot_fps = float(video_fps) * float(ratio)
     if plot_fps <= 0:
         raise ValueError("Computed plot_fps must be > 0 (check video_fps and ratio).")
-    
+
     window_len = left + right + 1
     x = np.arange(-left, right + 1, dtype=float)
-    
+
     # Global y-limits (stable visuals); renderers can still compute per-channel if you prefer
     global_ylim = _global_ylim(sig, ylim)
 
     # Heads-up for options we haven't implemented in renderers yet
     if show_legend and not combine_plots:
-        warnings.warn("show_legend is only meaningful for 'combine_plots=True'. Ignoring.", RuntimeWarning)
+        warnings.warn(
+            "show_legend is only meaningful for 'combine_plots=True'. Ignoring.",
+            RuntimeWarning,
+        )
     if show_values:
-        warnings.warn("show_values not yet implemented in renderers. Ignoring.", RuntimeWarning)
+        warnings.warn(
+            "show_values not yet implemented in renderers. Ignoring.", RuntimeWarning
+        )
 
     # Dispatch to the chosen renderer
     if separate_videos:
@@ -96,7 +102,7 @@ def generate_plot_videos(
                 right=right,
                 fps=plot_fps,
                 size=plot_size,
-                ylim=global_ylim,     # or None if you want per-channel limits
+                ylim=global_ylim,  # or None if you want per-channel limits
                 title=col_names[c],
                 alpha=False,
             )
@@ -113,7 +119,7 @@ def generate_plot_videos(
             size=plot_size,
             col_names=col_names if show_legend else None,
             ylim=global_ylim,
-            alpha=False,             # set True to get transparent .webm
+            alpha=False,  # set True to get transparent .webm
         )
         return True
 
@@ -133,6 +139,6 @@ def generate_plot_videos(
         base_size=plot_size,
         col_names=col_names,
         ylim=global_ylim,
-        alpha=False,                 # set True to get transparent .webm
+        alpha=False,  # set True to get transparent .webm
     )
     return True

@@ -40,6 +40,7 @@ os.environ["RENDERCANVAS_FORCE_OFFSCREEN"] = "1"
 
 TEST_DATA_DIR = Path(pathlib.Path.home(), "PersonalProjects/chronoviz/test_data")
 
+
 # %%
 def get_video_timeline(video_path: str | Path):
     container = av.open(video_path)
@@ -50,6 +51,7 @@ def get_video_timeline(video_path: str | Path):
         n_frames = sum(1 for _ in container.decode(video=0))
     timeline = np.arange(n_frames, dtype=float) / fps
     return fps, n_frames, timeline
+
 
 # %%
 def read_timeseries(path: str | Path, key: str = None) -> pd.DataFrame:
@@ -63,18 +65,28 @@ def read_timeseries(path: str | Path, key: str = None) -> pd.DataFrame:
             df = pd.read_hdf(path, key=key)
         except TypeError:
             import h5py
+
             with h5py.File(path, "r") as f:
                 if key not in f:
-                    raise KeyError(f"Key '{key}' not found. Available: {list(f.keys())}")
+                    raise KeyError(
+                        f"Key '{key}' not found. Available: {list(f.keys())}"
+                    )
                 data = f[key][:]
                 df = pd.DataFrame(data)
     else:
         raise ValueError(f"Unsupported file extension: {ext}")
     return df
 
+
 # %%
-def align_signal_cfr(video_times: np.ndarray, sig_values: np.ndarray, mode: str,
-                     ratio: float = 1.0, padding_mode: str = "edge", **kwargs) -> np.ndarray:
+def align_signal_cfr(
+    video_times: np.ndarray,
+    sig_values: np.ndarray,
+    mode: str,
+    ratio: float = 1.0,
+    padding_mode: str = "edge",
+    **kwargs,
+) -> np.ndarray:
     """
     Align signal values to target length int(len(video_times) * ratio).
 
@@ -85,9 +97,13 @@ def align_signal_cfr(video_times: np.ndarray, sig_values: np.ndarray, mode: str,
     if sig_values.ndim == 2:
         # avoid in-place; align each channel then stack
         return np.stack(
-            [align_signal_cfr(video_times, sig_values[:, c], mode, ratio, padding_mode, **kwargs)
-             for c in range(sig_values.shape[1])],
-            axis=1
+            [
+                align_signal_cfr(
+                    video_times, sig_values[:, c], mode, ratio, padding_mode, **kwargs
+                )
+                for c in range(sig_values.shape[1])
+            ],
+            axis=1,
         )
 
     target_len = int(len(video_times) * ratio)
@@ -95,9 +111,13 @@ def align_signal_cfr(video_times: np.ndarray, sig_values: np.ndarray, mode: str,
         return sig_values
 
     tol = 1e-3
-    observed_ratio = (len(sig_values) / len(video_times)) if len(video_times) else np.nan
+    observed_ratio = (
+        (len(sig_values) / len(video_times)) if len(video_times) else np.nan
+    )
     if len(video_times) and abs(observed_ratio - ratio) > tol:
-        print(f"Warning: observed ratio {observed_ratio:.6f} != expected {ratio:.6f}; results may be off.")
+        print(
+            f"Warning: observed ratio {observed_ratio:.6f} != expected {ratio:.6f}; results may be off."
+        )
 
     match mode:
         case "resample":
@@ -113,13 +133,17 @@ def align_signal_cfr(video_times: np.ndarray, sig_values: np.ndarray, mode: str,
         case _:
             raise ValueError(f"Unknown mode: {mode}")
 
+
 # %% [markdown]
 # ## Plotting (fastplotlib window-buffer)
+
 
 # ----------
 # helpers
 # ----------
-def _global_ylim(sig: np.ndarray, ylim: tuple[float, float] | None = None) -> tuple[float, float]:
+def _global_ylim(
+    sig: np.ndarray, ylim: tuple[float, float] | None = None
+) -> tuple[float, float]:
     if ylim is not None:
         return float(ylim[0]), float(ylim[1])
     finite = np.isfinite(sig)
@@ -133,7 +157,10 @@ def _global_ylim(sig: np.ndarray, ylim: tuple[float, float] | None = None) -> tu
         lo, hi = lo - m, hi + m
     return (lo, hi)
 
-def _compute_ylim(y: np.ndarray, ylim: tuple[float, float] | None = None) -> tuple[float, float]:
+
+def _compute_ylim(
+    y: np.ndarray, ylim: tuple[float, float] | None = None
+) -> tuple[float, float]:
     if ylim is not None:
         return float(ylim[0]), float(ylim[1])
     finite = np.isfinite(y)
@@ -141,12 +168,15 @@ def _compute_ylim(y: np.ndarray, ylim: tuple[float, float] | None = None) -> tup
         return (-1.0, 1.0)
     lo, hi = float(np.min(y[finite])), float(np.max(y[finite]))
     if lo == hi:
-        lo -= 0.5; hi += 0.5
+        lo -= 0.5
+        hi += 0.5
     pad = 0.05 * (hi - lo)
     return (lo - pad, hi + pad)
 
+
 def _has_cmd(name: str) -> bool:
     return shutil.which(name) is not None
+
 
 def _ffmpeg_writer(
     out_path: Path,
@@ -154,7 +184,7 @@ def _ffmpeg_writer(
     height: int,
     fps: float,
     alpha: bool,
-    encoder: str = "auto",        # "auto", "h264_videotoolbox", "h264_nvenc", "libx264", etc.
+    encoder: str = "auto",  # "auto", "h264_videotoolbox", "h264_nvenc", "libx264", etc.
     hevc: bool = False,
     qp: int | None = None,
     bitrate: str | None = None,
@@ -183,35 +213,65 @@ def _ffmpeg_writer(
                 sel = "hevc_nvenc" if hevc else "h264_nvenc"
             else:
                 sel = "libx264"
-        if sel.startswith(("h264", "hevc", "libx264", "libx265")) and ext not in {".mp4", ".m4v", ".mov"}:
+        if sel.startswith(("h264", "hevc", "libx264", "libx265")) and ext not in {
+            ".mp4",
+            ".m4v",
+            ".mov",
+        }:
             out_path = out_path.with_suffix(".mp4")
 
     size = f"{width}x{height}"
+
     def base_in(in_pix: str) -> list[str]:
-        return ["ffmpeg", "-y",
-                "-f", "rawvideo",
-                "-pix_fmt", in_pix,      # INPUT pix fmt BEFORE -i -
-                "-s", size,
-                "-r", f"{fps}",
-                "-i", "-"]
+        return [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            in_pix,  # INPUT pix fmt BEFORE -i -
+            "-s",
+            size,
+            "-r",
+            f"{fps}",
+            "-i",
+            "-",
+        ]
 
     if alpha:
         # We will WRITE RGBA frames in the loop
         if sel == "vp9":
-            cmd = base_in("rgba") + [
-                "-an",
-                "-c:v", "libvpx-vp9",
-                "-pix_fmt", "yuva420p",
-                "-lossless", "1",
-            ] + (extra_args or []) + [str(out_path)]
+            cmd = (
+                base_in("rgba")
+                + [
+                    "-an",
+                    "-c:v",
+                    "libvpx-vp9",
+                    "-pix_fmt",
+                    "yuva420p",
+                    "-lossless",
+                    "1",
+                ]
+                + (extra_args or [])
+                + [str(out_path)]
+            )
         elif sel == "prores":
-            cmd = base_in("rgba") + [
-                "-an",
-                "-c:v", "prores_ks",
-                "-profile:v", "4444",
-                "-pix_fmt", "yuva444p10le",
-                "-qscale:v", "8",
-            ] + (extra_args or []) + [str(out_path)]
+            cmd = (
+                base_in("rgba")
+                + [
+                    "-an",
+                    "-c:v",
+                    "prores_ks",
+                    "-profile:v",
+                    "4444",
+                    "-pix_fmt",
+                    "yuva444p10le",
+                    "-qscale:v",
+                    "8",
+                ]
+                + (extra_args or [])
+                + [str(out_path)]
+            )
         else:
             raise ValueError("Alpha requires 'vp9' or 'prores'")
     else:
@@ -233,17 +293,35 @@ def _ffmpeg_writer(
                 if qp is not None:
                     base_args += ["-rc", "constqp", "-qp", str(qp)]
                 elif bitrate:
-                    base_args += ["-b:v", bitrate, "-maxrate", bitrate, "-bufsize", bitrate]
+                    base_args += [
+                        "-b:v",
+                        bitrate,
+                        "-maxrate",
+                        bitrate,
+                        "-bufsize",
+                        bitrate,
+                    ]
                 else:
                     base_args += ["-rc", "vbr", "-cq", "19"]
-                base_args += ["-preset", "p4", "-tune", "ull", "-pix_fmt", "yuv420p", "-bf", "0", "-g", str(int(fps*2))]
+                base_args += [
+                    "-preset",
+                    "p4",
+                    "-tune",
+                    "ull",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-bf",
+                    "0",
+                    "-g",
+                    str(int(fps * 2)),
+                ]
             elif sel.endswith("_videotoolbox"):
                 base_args += ["-b:v", bitrate or "6M", "-pix_fmt", "yuv420p"]
             elif sel.endswith("_qsv"):
-                base_args += (["-b:v", bitrate] if bitrate else ["-global_quality", "23"])
+                base_args += ["-b:v", bitrate] if bitrate else ["-global_quality", "23"]
                 base_args += ["-pix_fmt", "yuv420p"]
             elif sel.endswith("_amf"):
-                base_args += (["-b:v", bitrate] if bitrate else ["-quality", "balanced"])
+                base_args += ["-b:v", bitrate] if bitrate else ["-quality", "balanced"]
                 base_args += ["-pix_fmt", "yuv420p"]
             cmd = base_in("rgb24") + base_args + (extra_args or []) + [str(out_path)]
 
@@ -252,13 +330,16 @@ def _ffmpeg_writer(
         cmd,
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,  # avoid blocking on ffmpeg logs
-        stderr=None,                # inherit so you SEE errors
+        stderr=None,  # inherit so you SEE errors
         bufsize=0,
     )
     return proc, out_path
 
+
 def _init_canvas(width: int, height: int, alpha: bool):
-    canvas = OffscreenRenderCanvas(size=(width, height), pixel_ratio=1.0, format="rgba-u8")
+    canvas = OffscreenRenderCanvas(
+        size=(width, height), pixel_ratio=1.0, format="rgba-u8"
+    )
     fig = fpl.Figure(size=(width, height), canvas=canvas)
     if alpha:
         try:
@@ -267,6 +348,7 @@ def _init_canvas(width: int, height: int, alpha: bool):
             pass
     # Create once; caller should call fig.show() once before loop
     return fig
+
 
 def _grab_frame(fig, want_rgba: bool) -> memoryview:
     """Return a memoryview of HxWxC uint8 matching want_rgba (True=4ch, False=3ch)."""
@@ -283,10 +365,12 @@ def _grab_frame(fig, want_rgba: bool) -> memoryview:
             arr = arr[..., :3]
         return memoryview(arr)
 
+
 def _add_vertical_line(ax, x0: float, y0: float, y1: float, **kwargs):
     xs = np.array([x0, x0], dtype=np.float32)
     ys = np.array([y0, y1], dtype=np.float32)
     return ax.add_line(xs, ys, **kwargs)
+
 
 # ----------
 # Renderers (window-buffer)
@@ -341,8 +425,9 @@ def render_one_channel(
     proc.wait()
     return out_path
 
+
 def render_all_channels(
-    signals: np.ndarray,                # [T, C]
+    signals: np.ndarray,  # [T, C]
     out_path: Path,
     left: int,
     right: int,
@@ -356,7 +441,11 @@ def render_all_channels(
     if sig.ndim == 1:
         sig = sig[:, None]
     T, C = sig.shape
-    names = col_names if (col_names and len(col_names) == C) else [f"ch{c}" for c in range(C)]
+    names = (
+        col_names
+        if (col_names and len(col_names) == C)
+        else [f"ch{c}" for c in range(C)]
+    )
 
     W = left + right + 1
     x = np.arange(-left, right + 1, dtype=np.float32)
@@ -385,7 +474,9 @@ def render_all_channels(
         e = min(T, t + right + 1)
         span = e - s
         for c in range(C):
-            ywin = lines[c].data[1]  # y reference (fastplotlib stores internally; safer to reassign)
+            ywin = lines[c].data[
+                1
+            ]  # y reference (fastplotlib stores internally; safer to reassign)
             # safer: rebuild ywin each frame to avoid internal ref surprises
             ytmp = np.full(W, np.nan, dtype=np.float32)
             if span > 0:
@@ -398,13 +489,14 @@ def render_all_channels(
     proc.wait()
     return out_path
 
+
 def render_grid(
-    signals: np.ndarray,                # [T, C]
+    signals: np.ndarray,  # [T, C]
     out_path: Path,
     left: int,
     right: int,
     fps: float,
-    grid: tuple[int, int],              # (rows, cols)
+    grid: tuple[int, int],  # (rows, cols)
     base_size: tuple[int, int] = (1280, 720),
     col_names: list[str] | None = None,
     ylim: tuple[float, float] | None = None,
@@ -417,7 +509,11 @@ def render_grid(
     rows, cols = grid
     if rows * cols < C:
         raise ValueError(f"grid {grid} too small for {C} channels.")
-    names = col_names if (col_names and len(col_names) == C) else [f"ch{c}" for c in range(C)]
+    names = (
+        col_names
+        if (col_names and len(col_names) == C)
+        else [f"ch{c}" for c in range(C)]
+    )
 
     W = left + right + 1
     x = np.arange(-left, right + 1, dtype=np.float32)
@@ -426,7 +522,9 @@ def render_grid(
     per_row_h = max(240, height // max(1, rows))
     total_h = per_row_h * rows
 
-    canvas = OffscreenRenderCanvas(size=(width, total_h), pixel_ratio=1.0, format="rgba-u8")
+    canvas = OffscreenRenderCanvas(
+        size=(width, total_h), pixel_ratio=1.0, format="rgba-u8"
+    )
     fig = fpl.Figure(size=(width, total_h), shape=(rows, cols), canvas=canvas)
 
     lines = []
@@ -466,10 +564,12 @@ def render_grid(
     proc.wait()
     return out_path
 
+
 # ----------
 # Orchestrator
 # ----------
 from typing import Optional
+
 
 def generate_plot_videos(
     aligned_signal: np.ndarray,
@@ -515,9 +615,14 @@ def generate_plot_videos(
     global_ylim = _global_ylim(sig, ylim)
 
     if show_legend and not combine_plots:
-        warnings.warn("show_legend is only meaningful for 'combine_plots=True'. Ignoring.", RuntimeWarning)
+        warnings.warn(
+            "show_legend is only meaningful for 'combine_plots=True'. Ignoring.",
+            RuntimeWarning,
+        )
     if show_values:
-        warnings.warn("show_values not yet implemented in renderers. Ignoring.", RuntimeWarning)
+        warnings.warn(
+            "show_values not yet implemented in renderers. Ignoring.", RuntimeWarning
+        )
 
     if separate_videos:
         for c in range(C):
@@ -569,6 +674,7 @@ def generate_plot_videos(
     )
     return True
 
+
 # %%
 # quick test (adjust paths for your env)
 if __name__ == "__main__":
@@ -578,7 +684,9 @@ if __name__ == "__main__":
     print(f"Successfully read data with shape: {df_h5.shape}")
     df_csv = read_timeseries(TEST_DATA_DIR / "slp/03.csv")
     print(f"Successfully read data with shape: {df_csv.shape}")
-    aligned = align_signal_cfr(timeline, df_h5.values, mode="resample", ratio=1.0, padding_mode="edge")
+    aligned = align_signal_cfr(
+        timeline, df_h5.values, mode="resample", ratio=1.0, padding_mode="edge"
+    )
 
     generate_plot_videos(
         aligned_signal=aligned,

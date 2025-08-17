@@ -3,8 +3,11 @@ from src.plotting import generate_plot_videos
 import pathlib
 from pathlib import Path
 
+
 def main():
-    TEST_DATA_DIR = Path(pathlib.Path.home(), "PersonalProjects/chronoviz/test_data/slp")
+    TEST_DATA_DIR = Path(
+        pathlib.Path.home(), "PersonalProjects/chronoviz/test_data/slp"
+    )
     video_path = TEST_DATA_DIR / "03.mp4"
     signal_path = TEST_DATA_DIR / "03.csv"
 
@@ -15,8 +18,8 @@ def main():
     aligned_signal = align_signal_cfr(
         video_times=video_times,
         sig_values=df.values,
-        ratio = 1,
-        mode="resample", 
+        ratio=1,
+        mode="resample",
     )
 
     generate_plot_videos(
@@ -28,7 +31,7 @@ def main():
         separate_videos=False,
         combine_plots=True,
         # ylim=(0, 20),
-        plot_size=(640, 512)
+        plot_size=(640, 512),
     )
 
 

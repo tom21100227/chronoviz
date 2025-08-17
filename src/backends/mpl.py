@@ -4,6 +4,7 @@ from ..utils import _has_cmd, _compute_ylim, clamp_nan_2d
 from ..writers import FFmpegWriter, FrameWriter, create_ffmpeg_writer
 import numpy as np
 import matplotlib as mpl
+
 mpl.use("Agg")  # offscreen; keeps GUI out of the loop
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -14,47 +15,47 @@ from typing import Tuple, List, Optional
 USE_RGB24 = False
 
 # global (before figure creation)
-mpl.rcParams.update({
-    "text.antialiased": True,        # cheaper text
-    "mathtext.default": "regular",    # avoid mathtext layout
-    "axes.unicode_minus": False,      # reduce glyph fallback
-    "font.family": "DejaVu Sans",     # pin to a single known font
-    "font.sans-serif": ["DejaVu Sans"],
-    "path.simplify": True,
-    "path.simplify_threshold": 1.0,
-    "agg.path.chunksize": 10000,    # chunk large paths for less memory use
-})
+mpl.rcParams.update(
+    {
+        "text.antialiased": True,  # cheaper text
+        "mathtext.default": "regular",  # avoid mathtext layout
+        "axes.unicode_minus": False,  # reduce glyph fallback
+        "font.family": "DejaVu Sans",  # pin to a single known font
+        "font.sans-serif": ["DejaVu Sans"],
+        "path.simplify": True,
+        "path.simplify_threshold": 1.0,
+        "agg.path.chunksize": 10000,  # chunk large paths for less memory use
+    }
+)
+
 
 def _lightweight_axes(ax):
     # no grid, thin spines
     ax.grid(True, which="major", axis="both", alpha=0.15, linewidth=0.6)
-    for s in ax.spines.values(): s.set_linewidth(1)
-
-    # # few ticks, no minors
-    # ax.xaxis.set_minor_locator(mticker.NullLocator())
-    # ax.yaxis.set_minor_locator(mticker.NullLocator())
-    # ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=4, prune='both'))
-    # ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=3))
-    # ax.xaxis.set_major_formatter(mticker.FormatStrFormatter('%.1f'))
-    # ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.1f'))
+    for s in ax.spines.values():
+        s.set_linewidth(1)
 
     fp = FontProperties(family="DejaVu Sans", size=8)
     for lbl in ax.get_xticklabels() + ax.get_yticklabels():
         lbl.set_fontproperties(fp)
 
 
-
 @njit(cache=True)
 def fill_window(sig, i, left, right, yout):
     L = left + right + 1
-    for k in range(L): yout[k] = float('nan')
+    for k in range(L):
+        yout[k] = float("nan")
     N = sig.shape[0]
-    s = i - left; e = i + right + 1
-    if s < 0: s = 0
-    if e > N: e = N
+    s = i - left
+    e = i + right + 1
+    if s < 0:
+        s = 0
+    if e > N:
+        e = N
     dst = left - (i - s)
     for j in range(e - s):
         yout[dst + j] = sig[s + j]
+
 
 def render_one_channel(
     signal: np.ndarray,
@@ -70,18 +71,12 @@ def render_one_channel(
 ) -> Path:
     """
     Stream a sliding-window line plot to FFmpeg. Returns final output Path.
-
-    Notes for speed:
-      - Create once, update line data per frame (no re-plotting).
-      - Autoscale is off; we only change xlim as we move the window.
-      - Window is fixed length; edges are padded with NaN so draw cost stays flat.
-      - If you make left/right very large, consider LOD min–max downsampling.
     """
     sig = np.asarray(signal, dtype=np.float32).ravel()
     N = sig.size
     if N == 0:
         raise ValueError("signal is empty")
-    
+
     if ylim is not None:
         # original_sig = sig.copy() # leave a copy here for if we decided to display true values later
         clamp_nan_2d(sig, ylim[0], ylim[1])
@@ -94,7 +89,7 @@ def render_one_channel(
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
 
     _lightweight_axes(ax)
-    
+
     # style: crisp & light for speed and readability
     ax.set_facecolor("white")
     for spine in ax.spines.values():
@@ -104,7 +99,14 @@ def render_one_channel(
     x = np.arange(-left, right + 1, dtype=np.float32)
 
     # Initial line (keep a handle; no markers/alpha—those are slow)
-    (line,) = ax.plot(x, np.full_like(x, np.nan), lw=1.2, solid_joinstyle="bevel", solid_capstyle="butt", animated=True)
+    (line,) = ax.plot(
+        x,
+        np.full_like(x, np.nan),
+        lw=1.2,
+        solid_joinstyle="bevel",
+        solid_capstyle="butt",
+        animated=True,
+    )
 
     # Axes limits: x is fixed; y either provided or computed globally
     ylo, yhi = _compute_ylim(sig, ylim)
@@ -133,7 +135,9 @@ def render_one_channel(
 
     # Create writer if not provided
     if writer is None:
-        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
+        writer = create_ffmpeg_writer(
+            Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24
+        )
 
     rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
 
@@ -148,19 +152,22 @@ def render_one_channel(
 
             fig.canvas.restore_region(background)
             ax.draw_artist(line)
-            fig.canvas.blit(ax.bbox)           # cheap: only the axes region
+            fig.canvas.blit(ax.bbox)  # cheap: only the axes region
             if USE_RGB24:
-                argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
-                rgb[...] = argb[:, :, 1:4]                   # ARGB → RGB (cheap memcpy in C)
+                argb = np.frombuffer(
+                    fig.canvas.tostring_argb(), dtype=np.uint8
+                ).reshape(H, W, 4)
+                rgb[...] = argb[:, :, 1:4]  # ARGB → RGB (cheap memcpy in C)
                 writer.write_frame(memoryview(rgb))
-            else: 
-                buf = memoryview(fig.canvas.buffer_rgba())   # no numpy, no .tobytes()
+            else:
+                buf = memoryview(fig.canvas.buffer_rgba())  # no numpy, no .tobytes()
                 writer.write_frame(buf)
     finally:
         plt.close(fig)
         final_path = writer.close()
 
     return final_path
+
 
 def render_all_channels(
     signals: np.ndarray,
@@ -260,7 +267,9 @@ def render_all_channels(
 
     # Create writer if not provided
     if writer is None:
-        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
+        writer = create_ffmpeg_writer(
+            Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24
+        )
 
     # Optional buffer for rgb24 path
     rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
@@ -281,7 +290,9 @@ def render_all_channels(
             # Write frame
             if USE_RGB24:
                 # ARGB -> RGB (fast copy); then write 3B/px
-                argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
+                argb = np.frombuffer(
+                    fig.canvas.tostring_argb(), dtype=np.uint8
+                ).reshape(H, W, 4)
                 rgb[...] = argb[:, :, 1:4]
                 writer.write_frame(memoryview(rgb))
             else:
