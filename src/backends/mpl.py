@@ -1,6 +1,7 @@
 import subprocess, os
 from pathlib import Path
-from ..utils import _has_cmd, _compute_ylim, pick_video_encoder, clamp_nan_2d
+from ..utils import _has_cmd, _compute_ylim, clamp_nan_2d
+from ..writers import FFmpegWriter, FrameWriter, create_ffmpeg_writer
 import numpy as np
 import matplotlib as mpl
 mpl.use("Agg")  # offscreen; keeps GUI out of the loop
@@ -41,36 +42,7 @@ def _lightweight_axes(ax):
     for lbl in ax.get_xticklabels() + ax.get_yticklabels():
         lbl.set_fontproperties(fp)
 
-def _ffmpeg_cmd(out_path: Path, w: int, h: int, fps: float,
-                alpha: bool, input_pix: str, use_cpu: bool = True) -> Tuple[List[str], Path]:
-    """
-    Build ffmpeg command for rawvideo stdin -> encoded mp4/webm.
-    input_pix: 'rgba', 'argb', or 'rgb24' (lowercase!)
-    """
-    out_path = Path(out_path)
-    if alpha:
-        # Prefer .webm when carrying alpha
-        if out_path.suffix.lower() != ".webm":
-            out_path = out_path.with_suffix(".webm")
-    else:
-        if out_path.suffix.lower() != ".mp4":
-            out_path = out_path.with_suffix(".mp4")
 
-    enc, enc_args = pick_video_encoder(alpha, cpu=use_cpu)
-
-    args = [
-        "ffmpeg", "-y",
-        "-f", "rawvideo",
-        "-pix_fmt", input_pix,            # must match what you write
-        "-s", f"{w}x{h}",
-        "-r", f"{fps:.6f}",
-        "-i", "-",
-        "-an",
-        "-c:v", enc,
-        *enc_args,
-        str(out_path),
-    ]
-    return args, out_path
 
 @njit(cache=True)
 def fill_window(sig, i, left, right, yout):
@@ -94,6 +66,7 @@ def render_one_channel(
     ylim: tuple[float, float] | None = None,
     title: str | None = None,
     alpha: bool = False,
+    writer: FrameWriter | None = None,
 ) -> Path:
     """
     Stream a sliding-window line plot to FFmpeg. Returns final output Path.
@@ -160,14 +133,11 @@ def render_one_channel(
     ywin = np.empty_like(x, dtype=np.float32)
     fill_window(sig, 0, left, right, ywin)  # JIT warmup
 
-
-    # FFmpeg pipe
-    cmd, out_path = _ffmpeg_cmd(Path(out_path), W, H, fps, alpha, "rgb24" if USE_RGB24 else "rgba")
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-
+    # Create writer if not provided
+    if writer is None:
+        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
 
     rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
-    fd = proc.stdin.fileno()
 
     try:
         # Render all frames: one frame per index to preserve original duration
@@ -184,17 +154,15 @@ def render_one_channel(
             if USE_RGB24:
                 argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
                 rgb[...] = argb[:, :, 1:4]                   # ARGB → RGB (cheap memcpy in C)
-                os.write(fd, memoryview(rgb))
+                writer.write_frame(memoryview(rgb))
             else: 
                 buf = memoryview(fig.canvas.buffer_rgba())   # no numpy, no .tobytes()
-                os.write(fd, buf)
+                writer.write_frame(buf)
     finally:
-        if proc.stdin:
-            proc.stdin.close()
-        proc.wait()
         plt.close(fig)
+        final_path = writer.close()
 
-    return out_path
+    return final_path
 
 def render_all_channels(
     signals: np.ndarray,
@@ -206,6 +174,7 @@ def render_all_channels(
     ylim: tuple[float, float] | None = None,
     col_names: List[str] | None = None,
     alpha: bool = False,
+    writer: FrameWriter | None = None,
 ) -> Path:
     """
     Combined-mode: all channels in one Axes (one line per channel), streamed to FFmpeg.
@@ -294,11 +263,9 @@ def render_all_channels(
     for c in range(C):
         fill_window(sig[:, c], 0, left, right, ywin[c])
 
-    # FFmpeg pipe (match pix_fmt to what we write)
-    input_pix = "rgb24" if USE_RGB24 else "rgba"
-    cmd, out_path = _ffmpeg_cmd(Path(out_path), W, H, fps, alpha, input_pix)
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-    fd = proc.stdin.fileno()
+    # Create writer if not provided
+    if writer is None:
+        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
 
     # Optional buffer for rgb24 path
     rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
@@ -321,13 +288,11 @@ def render_all_channels(
                 # ARGB -> RGB (fast copy); then write 3B/px
                 argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
                 rgb[...] = argb[:, :, 1:4]
-                os.write(fd, memoryview(rgb))
+                writer.write_frame(memoryview(rgb))
             else:
-                os.write(fd, memoryview(fig.canvas.buffer_rgba()))
+                writer.write_frame(memoryview(fig.canvas.buffer_rgba()))
     finally:
-        if proc.stdin:
-            proc.stdin.close()
-        proc.wait()
         plt.close(fig)
+        final_path = writer.close()
 
-    return out_path
+    return final_path
