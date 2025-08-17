@@ -10,9 +10,6 @@ from matplotlib.font_manager import FontProperties
 from numba import njit
 from typing import Tuple, List, Optional
 
-import cProfile, pstats
-pr = cProfile.Profile()
-
 USE_RGB24 = False
 
 # global (before figure creation)
@@ -175,7 +172,6 @@ def render_one_channel(
     try:
         # Render all frames: one frame per index to preserve original duration
         # (Your caller already set plot_fps = video_fps * ratio, so durations match.)
-        pr.enable()
         for i in range(N):
             fill_window(sig, i, left, right, ywin)
             line.set_ydata(ywin)
@@ -192,9 +188,6 @@ def render_one_channel(
             else: 
                 buf = memoryview(fig.canvas.buffer_rgba())   # no numpy, no .tobytes()
                 os.write(fd, buf)
-                # proc.stdin.write(buf)                        # write directly
-        pr.disable()
-        pstats.Stats(pr).strip_dirs().sort_stats("cumulative").print_stats(30)
     finally:
         if proc.stdin:
             proc.stdin.close()
