@@ -5,7 +5,7 @@ import subprocess
 import os
 from pathlib import Path
 from typing import Protocol, List
-from ..utils import pick_video_encoder
+from ..utils import pick_video_encoder, _has_cmd
 
 
 class FrameWriter(Protocol):
@@ -24,6 +24,8 @@ class FFmpegWriter:
     
     def __init__(self, out_path: Path, w: int, h: int, fps: float, 
                  alpha: bool, input_pix: str, use_cpu: bool = True):
+        if not _has_cmd("ffmpeg"):
+            raise RuntimeError("ffmpeg not found on PATH.")
         self.out_path = self._ensure_correct_extension(out_path, alpha)
         cmd = self._build_ffmpeg_cmd(w, h, fps, alpha, input_pix, use_cpu)
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)

@@ -77,8 +77,6 @@ def render_one_channel(
       - Window is fixed length; edges are padded with NaN so draw cost stays flat.
       - If you make left/right very large, consider LOD min–max downsampling.
     """
-    if not _has_cmd("ffmpeg"):
-        raise RuntimeError("ffmpeg not found on PATH.")
     sig = np.asarray(signal, dtype=np.float32).ravel()
     N = sig.size
     if N == 0:
@@ -179,9 +177,6 @@ def render_all_channels(
     """
     Combined-mode: all channels in one Axes (one line per channel), streamed to FFmpeg.
     """
-    if not _has_cmd("ffmpeg"):
-        raise RuntimeError("ffmpeg not found on PATH.")
-
     sig = np.asarray(signals, dtype=np.float32)
     if sig.ndim == 1:
         sig = sig[:, None]
