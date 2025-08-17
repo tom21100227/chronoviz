@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Protocol, List
 from ..utils import pick_video_encoder, _has_cmd
 
+DEFAULT_FFMPEG_LOGLEVEL = "warning"
+
 
 class FrameWriter(Protocol):
     """Protocol for writing video frames to different backends."""
@@ -59,6 +61,9 @@ class FFmpegWriter:
         enc, enc_args = pick_video_encoder(alpha, cpu=use_cpu)
         return [
             "ffmpeg",
+            "-loglevel",
+            DEFAULT_FFMPEG_LOGLEVEL,
+            "-stats",
             "-y",
             "-f",
             "rawvideo",
