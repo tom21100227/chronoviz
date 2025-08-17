@@ -7,23 +7,20 @@ types, data sizes, and rendering modes.
 """
 
 import numpy as np
-import pandas as pd
 import tempfile
 import time
 import pytest
 from pathlib import Path
 from contextlib import contextmanager
-from typing import Generator, Optional, Tuple, List
+from typing import Generator, Optional, List
 import shutil
 
 # Import the modules we want to benchmark
 import sys
-from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.plotting import generate_plot_videos
 from src.alignment import align_signal_cfr
-from src.backends.mpl import render_one_channel, render_all_channels, render_grid
 
 
 # Synthetic data generators
@@ -317,7 +314,7 @@ class TestAlignmentPerformance:
         # Create fake video times
         video_times = np.linspace(0, n_samples / 1000.0, n_samples // 2)
         
-        modes = ["resample", "interpolate"]
+        modes = ["resample", "pad"]
         
         for mode in modes:
             with timer() as t:

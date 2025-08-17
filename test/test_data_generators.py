@@ -3,7 +3,6 @@ Unit tests for synthetic data generators and basic functionality.
 """
 
 import numpy as np
-import pytest
 import sys
 from pathlib import Path
 from typing import Optional, List
@@ -148,13 +147,13 @@ class TestSyntheticDataGenerators:
     
     def test_reproducibility(self):
         """Test that generators produce reproducible results with same seed."""
-        data1 = generate_sine_waves(500, 2, seed=42)
-        data2 = generate_sine_waves(500, 2, seed=42)
+        data1 = generate_sine_waves(500, 2, seed=42, noise_level=0.1)
+        data2 = generate_sine_waves(500, 2, seed=42, noise_level=0.1)
         
         np.testing.assert_array_equal(data1, data2)
         
         # Different seeds should produce different results
-        data3 = generate_sine_waves(500, 2, seed=123)
+        data3 = generate_sine_waves(500, 2, seed=123, noise_level=0.1)
         assert not np.allclose(data1, data3)
     
     def test_custom_frequencies(self):
