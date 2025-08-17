@@ -24,7 +24,7 @@ def generate_plot_videos(
     right: int = 250,
     video_fps: float = 30.0,
     plot_size: tuple[int, int] = (1280, 720),
-    show_legend: bool = True,
+    show_legend: bool = False,
     show_values: bool = False,
     backend: str = "matplotlib",
     **kwargs,

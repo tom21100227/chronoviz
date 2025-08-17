@@ -11,3 +11,5 @@ wheels/
 *.DS_Store*
 
 test_data/slp
+
+.vscode

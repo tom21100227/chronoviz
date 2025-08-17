@@ -6,22 +6,15 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "av>=15.0.0",
-    "black>=25.1.0",
     "fastplotlib>=0.5.1",
     "glfw>=2.9.0",
-    "ipykernel>=6.30.1",
-    "jupyter-rfb>=0.5.3",
-    "jupytext>=1.17.2",
     "matplotlib>=3.10.5",
-    "mypy>=1.17.1",
     "numba>=0.61.2",
     "pandas>=2.3.1",
     "pygfx>=0.12.0",
-    "pytest>=8.4.1",
     "rendercanvas>=2.2.0",
-    "ruff>=0.12.9",
-    "sleap-io>=0.4.1",
     "tables>=3.10.2",
+    "turbojpeg>=0.0.2",
     "wgpu>=0.22.2",
 ]
 
@@ -29,6 +22,16 @@ dependencies = [
 hdf5 = [
     "tables>=3.10.2",
 ]
-sleap = [
-    "sleap-io>=0.4.1",
+jupyter = [
+    "ipykernel>=6.30.1",
+    "jupyter-rfb>=0.5.3",
+    "jupytext>=1.17.2",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "mypy>=1.17.1",
+    "pytest>=8.4.1",
+    "ruff>=0.12.9",
 ]
