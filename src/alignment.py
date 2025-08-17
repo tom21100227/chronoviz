@@ -5,6 +5,7 @@ Module for aligning time series signals to video frame timelines.
 import av, pathlib, numpy as np, pandas as pd
 from pathlib import Path
 
+
 def get_video_timeline(video_path: str | Path):
     container = av.open(video_path)
     video_stream = container.streams.video[0]

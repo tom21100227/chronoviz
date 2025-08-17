@@ -24,7 +24,7 @@ mpl.rcParams.update(
         "font.sans-serif": ["DejaVu Sans"],
         "path.simplify": True,
         "path.simplify_threshold": 1.0,
-        "agg.path.chunksize": 10000,  # chunk large paths for less memory use
+        # "agg.path.chunksize": 10000,  # chunk large paths for less memory use
     }
 )
 

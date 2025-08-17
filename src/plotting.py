@@ -27,7 +27,7 @@ def generate_plot_videos(
     show_legend: bool = True,
     show_values: bool = False,
     backend: str = "matplotlib",
-) -> bool:
+) -> Path:
     """
     Generate sliding-window plot video(s) from a pre-aligned signal.
     Output duration matches original video if plot_fps = video_fps * ratio.
@@ -52,7 +52,7 @@ def generate_plot_videos(
           but I plan to support pygfx (or fastplotlib) in the future for better performance.
 
     Returns:
-        - True if successful, False otherwise
+        - the absolute path to the output video (or directory containing multiple videos)
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -107,10 +107,10 @@ def generate_plot_videos(
                     title=col_names[c],
                     alpha=False,
                 )
-            return True
+            return output_dir
         case "combine":
             out = output_dir / "signals_plot_combined"
-            render_all_channels(
+            return render_all_channels(
                 signals=sig,
                 out_path=out,
                 left=left,
@@ -121,7 +121,6 @@ def generate_plot_videos(
                 ylim=global_ylim,
                 alpha=False,  # set True to get transparent .webm
             )
-            return True
         case "grid":
             if grid is None:
                 warnings.warn(
@@ -129,7 +128,7 @@ def generate_plot_videos(
                     RuntimeWarning,
                 )
             out = output_dir / "signals_plot_grid"
-            render_grid(
+            return render_grid(
                 signals=sig,
                 out_path=out,
                 left=left,
@@ -141,4 +140,3 @@ def generate_plot_videos(
                 ylim=global_ylim,
                 alpha=False,  # set True to get transparent .webm
             )
-            return True

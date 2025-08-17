@@ -1,5 +1,6 @@
 from src.alignment import get_video_timeline, read_timeseries, align_signal_cfr
 from src.plotting import generate_plot_videos
+from src.combine import combine_videos
 import pathlib
 from pathlib import Path
 
@@ -22,7 +23,7 @@ def main():
         mode="resample",
     )
 
-    generate_plot_videos(
+    plot = generate_plot_videos(
         aligned_signal=aligned_signal,
         ratio=1.0,
         output_dir=TEST_DATA_DIR / "outputs",
@@ -32,6 +33,15 @@ def main():
         grid=(2, 1),
         ylim=(0, 20),
         plot_size=(640, 512),
+    )
+
+    combine_videos(
+        video_path=video_path,
+        plot_video_path=plot,
+        output_path=TEST_DATA_DIR / "outputs" / "combined_output.mp4",
+        ratio=1.0,
+        position="right",
+        overlay=False,
     )
 
 
