@@ -1,3 +1,11 @@
-# Fast, real-time (in the future) time series visualization tool
+# Fast, syncrounized time series visualization tool
 
-chronoviz is a Python package for visualizing time series data with accompanying video in real-time. It is designed to handle large datasets efficiently and provides an easy-to-use interface for creating interactive visualizations. Visualizing a 10 minutes, 2 channels signal at 30fps take less than 20 seconds.
+ChronoViz is a high-performance Python tool for rendering time series data alongside video syncrounously.
+
+Currently it focuses on fast offline rendering using Matplotlib + FFmpeg, making it easy to generate synchronized visualizations for long recordings.
+
+Roadmap: 
+- [ ] CLI tool for easy rendering from command line
+- [ ] GPU acceleration using libraries like VisPy or pygfx
+- [ ] Realtime streaming support for live data visualization
+- [ ] Interactive playback using libraries like PyQt or Dash
