@@ -29,6 +29,66 @@ mpl.rcParams.update(
 )
 
 
+def _prepare_line_styles(line_kwargs: dict | List[dict] | None, num_channels: int) -> List[dict]:
+    """Prepare line kwargs for multiple channels, same as plt.plot() accepts."""
+    default_kwargs = {
+        "lw": 1.2,
+        "antialiased": True,
+        "solid_joinstyle": "bevel",
+        "solid_capstyle": "butt", 
+        "animated": True,
+    }
+    
+    if line_kwargs is None:
+        # No custom styling - use defaults with automatic colors for multi-channel
+        if num_channels == 1:
+            return [default_kwargs.copy()]
+        else:
+            # Auto-assign colors from matplotlib's default color cycle
+            styles = []
+            colors = plt.get_cmap("tab10").colors
+            for i in range(num_channels):
+                kwargs = default_kwargs.copy()
+                kwargs["color"] = colors[i % len(colors)]
+                styles.append(kwargs)
+            return styles
+    
+    if isinstance(line_kwargs, dict):
+        # Single kwargs dict - apply to all channels
+        if num_channels == 1:
+            kwargs = default_kwargs.copy()
+            kwargs.update(line_kwargs)
+            return [kwargs]
+        else:
+            # Multi-channel: if no color specified, auto-assign colors
+            styles = []
+            colors = plt.get_cmap("tab10").colors
+            for i in range(num_channels):
+                kwargs = default_kwargs.copy()
+                kwargs.update(line_kwargs)
+                # Only auto-assign color if user didn't specify one
+                if "color" not in line_kwargs and "c" not in line_kwargs:
+                    kwargs["color"] = colors[i % len(colors)]
+                styles.append(kwargs)
+            return styles
+    
+    if isinstance(line_kwargs, list):
+        # List of kwargs - pad with defaults if needed
+        colors = plt.get_cmap("tab10").colors
+        styles = []
+        for i in range(num_channels):
+            kwargs = default_kwargs.copy()
+            if i < len(line_kwargs):
+                kwargs.update(line_kwargs[i])
+            # Only auto-assign color if user didn't specify one for this channel
+            if i >= len(line_kwargs) or ("color" not in line_kwargs[i] and "c" not in line_kwargs[i]):
+                kwargs["color"] = colors[i % len(colors)]
+            styles.append(kwargs)
+        return styles
+    
+    return [default_kwargs.copy() for _ in range(num_channels)]
+
+
 def _lightweight_axes(ax):
     # no grid, thin spines
     ax.grid(True, which="major", axis="both", alpha=0.15, linewidth=0.6)
@@ -68,9 +128,13 @@ def render_one_channel(
     title: str | None = None,
     alpha: bool = False,
     writer: FrameWriter | None = None,
+    line_kwargs: dict | None = None,
 ) -> Path:
     """
     Stream a sliding-window line plot to FFmpeg. Returns final output Path.
+    
+    Parameters:
+        line_kwargs: Keyword arguments passed to plt.plot() (e.g., linewidth=2.0, color='red', linestyle='--')
     """
     sig = np.asarray(signal, dtype=np.float32).ravel()
     N = sig.size
@@ -97,15 +161,18 @@ def render_one_channel(
     # Fixed x-grid: [-left, ..., 0, ..., right]
     x = np.arange(-left, right + 1, dtype=np.float32)
 
+    # Prepare line styling - merge user kwargs with defaults
+    default_kwargs = {
+        "lw": 1.2,
+        "solid_joinstyle": "bevel", 
+        "solid_capstyle": "butt",
+        "animated": True,
+    }
+    if line_kwargs:
+        default_kwargs.update(line_kwargs)
+
     # Initial line (keep a handle; no markers/alpha—those are slow)
-    (line,) = ax.plot(
-        x,
-        np.full_like(x, np.nan),
-        lw=1.2,
-        solid_joinstyle="bevel",
-        solid_capstyle="butt",
-        animated=True,
-    )
+    (line,) = ax.plot(x, np.full_like(x, np.nan), **default_kwargs)
 
     # Axes limits: x is fixed; y either provided or computed globally
     ylo, yhi = _compute_ylim(sig, ylim)
@@ -179,9 +246,14 @@ def render_all_channels(
     col_names: List[str] | None = None,
     alpha: bool = False,
     writer: FrameWriter | None = None,
+    line_kwargs: dict | List[dict] | None = None,
 ) -> Path:
     """
     Combined-mode: all channels in one Axes (one line per channel), streamed to FFmpeg.
+    
+    Parameters:
+        line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels), 
+                    or a list of dicts (one per channel)
     """
     sig = np.asarray(signals, dtype=np.float32)
     if sig.ndim == 1:
@@ -211,18 +283,13 @@ def render_all_channels(
     # Shared x for all channels
     x = np.arange(-left, right + 1, dtype=np.float32)
 
+    # Prepare styles for each channel
+    styles = _prepare_line_styles(line_kwargs, C)
+
     # Lines (animated for blitting)
     lines: list[plt.Line2D] = []
-    for _ in range(C):
-        (ln,) = ax.plot(
-            x,
-            np.full_like(x, np.nan),
-            lw=1.2,
-            antialiased=True,
-            solid_joinstyle="bevel",
-            solid_capstyle="butt",
-            animated=True,
-        )
+    for i in range(C):
+        (ln,) = ax.plot(x, np.full_like(x, np.nan), **styles[i])
         lines.append(ln)
 
     for ln in lines:
@@ -315,9 +382,14 @@ def render_grid(
     col_names: List[str] | None = None,
     alpha: bool = False,
     writer: FrameWriter | None = None,
+    line_kwargs: dict | List[dict] | None = None,
 ) -> Path:
     """
     Grid-mode: each channel in its own subplot, streamed to FFmpeg.
+    
+    Parameters:
+        line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels), 
+                    or a list of dicts (one per channel)
     """
     sig = np.asarray(signals, dtype=np.float32)
     if sig.ndim == 1:
@@ -360,6 +432,9 @@ def render_grid(
     # Shared x for all channels
     x = np.arange(-left, right + 1, dtype=np.float32)
 
+    # Prepare styles for each channel
+    styles = _prepare_line_styles(line_kwargs, C)
+
     # Lines for each subplot (animated for blitting)
     lines: list[plt.Line2D] = []
     for c in range(C):
@@ -369,15 +444,7 @@ def render_grid(
         for spine in ax.spines.values():
             spine.set_linewidth(1)
 
-        (line,) = ax.plot(
-            x,
-            np.full_like(x, np.nan),
-            lw=1.2,
-            antialiased=True,
-            solid_joinstyle="bevel",
-            solid_capstyle="butt",
-            animated=True,
-        )
+        (line,) = ax.plot(x, np.full_like(x, np.nan), **styles[c])
         lines.append(line)
 
         # Set limits for each subplot
