@@ -27,6 +27,7 @@ def generate_plot_videos(
     show_legend: bool = True,
     show_values: bool = False,
     backend: str = "matplotlib",
+    **kwargs,
 ) -> Path:
     """
     Generate sliding-window plot video(s) from a pre-aligned signal.
@@ -106,6 +107,7 @@ def generate_plot_videos(
                     ylim=global_ylim,  # or None if you want per-channel limits
                     title=col_names[c],
                     alpha=False,
+                    **kwargs,
                 )
             return output_dir
         case "combine":
@@ -120,6 +122,7 @@ def generate_plot_videos(
                 col_names=col_names if show_legend else None,
                 ylim=global_ylim,
                 alpha=False,  # set True to get transparent .webm
+                **kwargs,
             )
         case "grid":
             if grid is None:
@@ -139,4 +142,5 @@ def generate_plot_videos(
                 col_names=col_names,
                 ylim=global_ylim,
                 alpha=False,  # set True to get transparent .webm
+                **kwargs,
             )

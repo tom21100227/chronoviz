@@ -74,7 +74,7 @@ def pick_video_encoder(alpha: bool, cpu: bool = False) -> Tuple[str, List[str]]:
                 "-pix_fmt",
                 "yuva420p",
             ]
-        return "libx264", ["-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p"]
+        return "libx264", ["-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p"]
 
     # macOS hardware (Metal/VideoToolbox)
     if sys == "darwin" and _ffmpeg_has_encoder("h264_videotoolbox") and not alpha:

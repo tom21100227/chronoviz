@@ -89,6 +89,34 @@ def _prepare_line_styles(line_kwargs: dict | List[dict] | None, num_channels: in
     return [default_kwargs.copy() for _ in range(num_channels)]
 
 
+def _apply_axis_customizations(ax, xlabel=None, ylabel=None, axis_kwargs=None):
+    """Apply user-specified axis customizations."""
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=9)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=9)
+    
+    if axis_kwargs:
+        # Handle common axis customizations
+        if 'grid' in axis_kwargs:
+            if axis_kwargs['grid']:
+                ax.grid(True, alpha=0.15, linewidth=0.6)
+            else:
+                ax.grid(False)
+        
+        if 'spines' in axis_kwargs:
+            spine_settings = axis_kwargs['spines']
+            for spine_name, visible in spine_settings.items():
+                if spine_name in ax.spines:
+                    ax.spines[spine_name].set_visible(visible)
+        
+        if 'tick_params' in axis_kwargs:
+            ax.tick_params(**axis_kwargs['tick_params'])
+        
+        if 'facecolor' in axis_kwargs:
+            ax.set_facecolor(axis_kwargs['facecolor'])
+
+
 def _lightweight_axes(ax):
     # no grid, thin spines
     ax.grid(True, which="major", axis="both", alpha=0.15, linewidth=0.6)
@@ -129,12 +157,18 @@ def render_one_channel(
     alpha: bool = False,
     writer: FrameWriter | None = None,
     line_kwargs: dict | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    axis_kwargs: dict | None = None,
 ) -> Path:
     """
     Stream a sliding-window line plot to FFmpeg. Returns final output Path.
     
     Parameters:
         line_kwargs: Keyword arguments passed to plt.plot() (e.g., linewidth=2.0, color='red', linestyle='--')
+        xlabel: Label for x-axis
+        ylabel: Label for y-axis  
+        axis_kwargs: Additional axis formatting (e.g., {'grid': False, 'spines': {'top': False}})
     """
     sig = np.asarray(signal, dtype=np.float32).ravel()
     N = sig.size
@@ -184,6 +218,9 @@ def render_one_channel(
 
     if title:
         ax.set_title(title, fontsize=10)
+
+    # Apply axis customizations
+    _apply_axis_customizations(ax, xlabel, ylabel, axis_kwargs)
 
     # Turn off autoscale to avoid recomputation on every set_data
     ax.set_autoscalex_on(False)
@@ -247,6 +284,9 @@ def render_all_channels(
     alpha: bool = False,
     writer: FrameWriter | None = None,
     line_kwargs: dict | List[dict] | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    axis_kwargs: dict | None = None,
 ) -> Path:
     """
     Combined-mode: all channels in one Axes (one line per channel), streamed to FFmpeg.
@@ -254,6 +294,9 @@ def render_all_channels(
     Parameters:
         line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels), 
                     or a list of dicts (one per channel)
+        xlabel: Label for x-axis
+        ylabel: Label for y-axis  
+        axis_kwargs: Additional axis formatting (e.g., {'grid': False, 'spines': {'top': False}})
     """
     sig = np.asarray(signals, dtype=np.float32)
     if sig.ndim == 1:
@@ -319,6 +362,9 @@ def render_all_channels(
         for legline in leg.get_lines():
             legline.set_linewidth(1.5)
 
+    # Apply axis customizations
+    _apply_axis_customizations(ax, xlabel, ylabel, axis_kwargs)
+
     fig.tight_layout(pad=0)
 
     # First draw + cache background
@@ -383,6 +429,9 @@ def render_grid(
     alpha: bool = False,
     writer: FrameWriter | None = None,
     line_kwargs: dict | List[dict] | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    axis_kwargs: dict | None = None,
 ) -> Path:
     """
     Grid-mode: each channel in its own subplot, streamed to FFmpeg.
@@ -390,6 +439,9 @@ def render_grid(
     Parameters:
         line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels), 
                     or a list of dicts (one per channel)
+        xlabel: Label for x-axis (applied to all subplots)
+        ylabel: Label for y-axis (applied to all subplots)
+        axis_kwargs: Additional axis formatting applied to all subplots
     """
     sig = np.asarray(signals, dtype=np.float32)
     if sig.ndim == 1:
@@ -459,6 +511,9 @@ def render_grid(
 
         # Title for each subplot
         ax.set_title(col_names[c], fontsize=8, pad=2)
+        
+        # Apply axis customizations to each subplot
+        _apply_axis_customizations(ax, xlabel, ylabel, axis_kwargs)
 
     # Hide unused subplots
     for c in range(C, len(axes)):

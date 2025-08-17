@@ -32,7 +32,9 @@ def main():
         mode="grid",
         grid=(2, 1),
         ylim=(0, 20),
-        plot_size=(640, 512),
+        plot_size=(320, 512),
+        xlabel="Time (samples)",
+        ylabel="Speed (cm/s)",
     )
 
     combine_videos(
