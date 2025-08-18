@@ -1,20 +1,6 @@
 """
 Module for combining original videos with generated plot videos.
-GPU-aware: uses CUDA/QSV/VAAPI/Video               # Handle hardware acceleration flags based on backend type
-        if backend:
-            if backend.needs_upload:
-                # VideoToolbox: minimal hw setup, explicit upload in filters
-                base += ["-init_hw_device", "videotoolbox=vt"]
-            else:
-                # CUDA/QSV/VAAPI: full hardware decode acceleration
-                base += backend.hw_flagsndle hardware acceleration flags based on backend type
-        if backend:
-            if backend.needs_upload:
-                # VideoToolbox: minimal hw setup, explicit upload in filters
-                base += ["-init_hw_device", "videotoolbox=vt"]
-            else:
-                # CUDA/QSV/VAAPI: full hardware decode acceleration
-                base += backend.hw_flagsox when available.
+GPU-aware: uses CUDA/QSV/VAAPI/Video
 """
 
 from pathlib import Path
