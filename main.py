@@ -44,6 +44,7 @@ def main():
         ratio=1.0,
         position="right",
         overlay=False,
+        cpu=True
     )
 
 

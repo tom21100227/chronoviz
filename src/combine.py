@@ -59,7 +59,8 @@ def combine_videos(
     position: str = "bottom",  # "top", "bottom", "left", "right"
     overlay: bool = False,
     alpha: float = 1,
-    cpu: bool = False
+    cpu: bool = False,
+    force_cpu_for_stack: bool = False
 ) -> bool:
     """
     Combine original video with plot video. Prefers GPU paths when possible.
@@ -72,6 +73,8 @@ def combine_videos(
         - position: Position of the plot video relative to the original ("top", "bottom", "left", "right", "tr", "tl", "br", bl").
         - overlay: If True, overlay the plot on top of the original video. Note: position "tr", "tl", "br", "bl" only valid when overlay is True.
         - alpha: Transparency level for overlay (0.0 to 1.0).
+        - cpu: Force CPU-only processing for all operations.
+        - force_cpu_for_stack: Override default behavior for stack operations. If None, auto-decides based on platform (True for VideoToolbox/Apple Silicon).
 
     Returns:
         - True if successful, False otherwise.
@@ -81,209 +84,88 @@ def combine_videos(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        # Try to use a GPU backend (for scale and possibly overlay)
-        backend = _select_backend(require_alpha=(alpha < 1.0))
-        have_gpu_overlay = False
-        if backend and backend.overlay_filter:
-            have_gpu_overlay = _ffmpeg_supports_filter(backend.overlay_filter)
+    # Try to use a GPU backend (for scale and possibly overlay)
+    backend = _select_backend(require_alpha=(alpha < 1.0)) if not cpu else None
+    if force_cpu_for_stack is None:
+        force_cpu_for_stack = (
+            not overlay and  # Only affects stack operations
+            backend and 
+            backend.name == "videotoolbox"  # VideoToolbox has expensive transfers
+        )
+        if force_cpu_for_stack:
+            print("Auto-enabling CPU-only processing for stack operations on VideoToolbox to avoid GPU-CPU transfer overhead")
 
-        # Pick an encoder:
-        # - If alpha < 1 and we have a GPU backend, prefer its hw encoder.
-        # - If alpha is requested or no backend, fall back to pick_video_encoder().
-        if backend and alpha >= 1.0:
-            encoder = backend.encoder
-            encoder_args = list(backend.enc_args)
-        else:
-            # alpha=True typically implies VP9/AV1 software path
-            encoder, encoder_args = pick_video_encoder(alpha=alpha < 1.0, cpu=True)
+    have_gpu_overlay = False
+    if backend and backend.overlay_filter:
+        have_gpu_overlay = _ffmpeg_supports_filter(backend.overlay_filter)
 
-        # Build the setpts segment if fps ratio != 1
-        if ratio != 1.0:
-            setpts = f"[1:v]setpts={ratio}*PTS[plot_adj]"
-            plot_lbl = "[plot_adj]"
-        else:
-            setpts = ""
-            plot_lbl = "[1:v]"
+    # Pick an encoder:
+    # - If alpha < 1 and we have a GPU backend, prefer its hw encoder.
+    # - If alpha is requested or no backend, fall back to pick_video_encoder().
+    if backend and alpha >= 1.0:
+        encoder = backend.encoder
+        encoder_args = list(backend.enc_args)
+    else:
+        # alpha=True typically implies VP9/AV1 software path
+        encoder, encoder_args = pick_video_encoder(alpha=alpha < 1.0, cpu=True)
 
-        # Common ffmpeg preamble
-        base = [
-            "ffmpeg",
-            "-y",
-            "-hide_banner",
-            "-loglevel",
-            COMBINE_FFMPEG_LOGLEVEL,
-            "-stats",
-        ]
+    # Build the setpts segment if fps ratio != 1
+    if ratio != 1.0:
+        setpts = f"[1:v]setpts={ratio}*PTS[plot_adj]"
+        plot_lbl = "[plot_adj]"
+    else:
+        setpts = ""
+        plot_lbl = "[1:v]"
 
-        # If we have a GPU backend and we are going to stay in hw frames for a while,
-        # include its hw accel flags up front. (If we later use only CPU filters,
-        # that’s still fine; hw flags just enable hw decode if possible.)
-        if backend:
-            base += backend.hw_flags
+    # Common ffmpeg preamble
+    base = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        COMBINE_FFMPEG_LOGLEVEL,
+        "-stats",
+    ]
 
-        # ===== OVERLAY MODE =====
-        if overlay:
-            # Position
-            overlay_pos = _overlay_coords(position)
+    # If we have a GPU backend and we are going to stay in hw frames for a while,
+    # include its hw accel flags up front. (If we later use only CPU filters,
+    # that’s still fine; hw flags just enable hw decode if possible.)
+    if backend:
+        base += backend.hw_flags
 
-            # Case A: Full GPU path (no alpha + backend overlay filter exists)
-            if backend and alpha >= 1.0 and have_gpu_overlay:
-                pre = []
-                if setpts:
-                    pre.append(setpts)
-                
-                # For VideoToolbox, upload both inputs to GPU
-                if backend.needs_upload:
-                    # Upload main video to GPU
-                    pre.append("[0:v]hwupload=derive_device=videotoolbox[main_hw]")
-                    # Upload plot video to GPU (handling setpts label)
-                    if setpts:
-                        pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]")
-                    else:
-                        pre.append("[1:v]hwupload=derive_device=videotoolbox[plot_hw]")
-                    main_lbl = "[main_hw]"
-                    plot_lbl = "[plot_hw]"
-                else:
-                    main_lbl = "[0:v]"
-                    # plot_lbl already set above
+    # ===== OVERLAY MODE =====
+    if overlay:
+        # Position
+        overlay_pos = _overlay_coords(position)
 
-                # If you need to scale the overlay, prefer GPU scale to keep frames in hw.
-                # Here we keep native size; add a scale if you want to enforce a specific overlay size.
-                # Example: pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]"); plot_lbl = "[plot_hw]"
-
-                filter_complex = "; ".join(
-                    [*pre, f"{main_lbl}{plot_lbl}{backend.overlay_filter}={overlay_pos}"]
-                )
-
-                cmd = base + [
-                    "-i",
-                    str(video_path),
-                    "-i",
-                    str(plot_video_path),
-                    "-filter_complex",
-                    filter_complex,
-                    "-c:v",
-                    encoder,
-                    *encoder_args,
-                    "-c:a",
-                    "copy",
-                    "-movflags",
-                    "+faststart",
-                    str(output_path),
-                ]
-
-            # Case B: Alpha blending or no GPU overlay → GPU scale (if possible) then CPU overlay
-            else:
-                pre = []
-                if setpts:
-                    pre.append(setpts)
-
-                # If we have a backend, do GPU scale first to save CPU, then download once.
-                if backend:
-                    # For VideoToolbox, upload to GPU first
-                    if backend.needs_upload:
-                        pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]")
-                        plot_lbl = "[plot_hw]"
-                    
-                    # If you want to resize the overlay prior to compositing, do it here:
-                    # example keeps original size; uncomment to enforce a height:
-                    # pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]"); plot_lbl = "[plot_hw]"
-                    # Now download to system memory for CPU overlay / alpha
-                    pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_sw]")
-                    plot_lbl = "[plot_sw]"
-
-                # If alpha < 1, do RGBA + colorchannelmixer on CPU
-                if alpha < 1.0:
-                    pre.append(
-                        f"{plot_lbl}format=rgba,colorchannelmixer=aa={alpha}[overlay_src]"
-                    )
-                    plot_lbl = "[overlay_src]"
-
-                filter_complex = "; ".join(
-                    [*pre, f"[0:v]{plot_lbl}overlay={overlay_pos}"]
-                )
-
-                cmd = base + [
-                    "-i",
-                    str(video_path),
-                    "-i",
-                    str(plot_video_path),
-                    "-filter_complex",
-                    filter_complex,
-                    "-c:v",
-                    encoder,
-                    *encoder_args,
-                    "-c:a",
-                    "copy",
-                    "-movflags",
-                    "+faststart",
-                    str(output_path),
-                ]
-
-        # ===== STACK MODE (left/right/top/bottom) =====
-        else:
-            if position not in ("top", "bottom", "left", "right"):
-                raise ValueError(
-                    f"Position '{position}' not valid for side-by-side mode. Use 'top', 'bottom', 'left', or 'right'."
-                )
-
+        # Case A: Full GPU path (no alpha + backend overlay filter exists)
+        if backend and alpha >= 1.0 and have_gpu_overlay:
             pre = []
             if setpts:
                 pre.append(setpts)
-
-            # hstack/vstack are CPU filters. We can still offload scaling first.
-            if backend:
-                # For VideoToolbox, upload to GPU first
-                if backend.needs_upload:
-                    pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_uploaded]")
-                    plot_lbl = "[plot_uploaded]"
-                
-                # VideoToolbox scale_vt doesn't handle -2 (auto-calc) well, use software scaling
-                if backend.needs_upload:
-                    # Download first, then use CPU scaling which handles -2 properly
-                    pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_downloaded]")
-                    if position in ("top", "bottom"):
-                        # Match widths to a fixed target (avoid runtime dependent sizing)
-                        pre.append(f"[plot_downloaded]scale=1280:-2[plot_sw]")
-                    else:
-                        # Match heights  
-                        pre.append(f"[plot_downloaded]scale=-2:1024[plot_sw]")
-                    plot_lbl = "[plot_sw]"
+            
+            # For VideoToolbox, upload both inputs to GPU
+            if backend.needs_upload:
+                # Upload main video to GPU
+                pre.append("[0:v]hwupload=derive_device=videotoolbox[main_hw]")
+                # Upload plot video to GPU (handling setpts label)
+                if setpts:
+                    pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]")
                 else:
-                    # CUDA/QSV/VAAPI can handle -2 in hardware scaling
-                    if position in ("top", "bottom"):
-                        # Match widths to a fixed target (avoid runtime dependent sizing)
-                        pre.append(f"{plot_lbl}{backend.scale_filter}=1280:-2[plot_hw]")
-                    else:
-                        # Match heights
-                        pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]")
-                    plot_lbl = "[plot_hw]"
-                    pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_sw]")
-                    plot_lbl = "[plot_sw]"
+                    pre.append("[1:v]hwupload=derive_device=videotoolbox[plot_hw]")
+                main_lbl = "[main_hw]"
+                plot_lbl = "[plot_hw]"
             else:
-                # Pure CPU scaling fallback
-                if position in ("top", "bottom"):
-                    pre.append(
-                        f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=1280:-2[plot_sw]"
-                    )
-                else:
-                    pre.append(
-                        f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=-2:1024[plot_sw]"
-                    )
-                plot_lbl = "[plot_sw]"
+                main_lbl = "[0:v]"
+                # plot_lbl already set above
 
-            # Stack
-            if position == "bottom":
-                stack = f"[0:v]{plot_lbl}vstack=inputs=2"
-            elif position == "top":
-                stack = f"{plot_lbl}[0:v]vstack=inputs=2"
-            elif position == "right":
-                stack = f"[0:v]{plot_lbl}hstack=inputs=2"
-            else:  # left
-                stack = f"{plot_lbl}[0:v]hstack=inputs=2"
+            # If you need to scale the overlay, prefer GPU scale to keep frames in hw.
+            # Here we keep native size; add a scale if you want to enforce a specific overlay size.
+            # Example: pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]"); plot_lbl = "[plot_hw]"
 
-            filter_complex = "; ".join([*pre, stack])
+            filter_complex = "; ".join(
+                [*pre, f"{main_lbl}{plot_lbl}{backend.overlay_filter}={overlay_pos}"]
+            )
 
             cmd = base + [
                 "-i",
@@ -302,8 +184,168 @@ def combine_videos(
                 str(output_path),
             ]
 
-        print(f"Running ffmpeg command:{" ".join(cmd)}")
+        # Case B: Alpha blending or no GPU overlay → GPU scale (if possible) then CPU overlay
+        else:
+            pre = []
+            if setpts:
+                pre.append(setpts)
 
+            # If we have a backend, do GPU scale first to save CPU, then download once.
+            if backend:
+                # For VideoToolbox, upload to GPU first
+                if backend.needs_upload:
+                    pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]")
+                    plot_lbl = "[plot_hw]"
+                
+                # If you want to resize the overlay prior to compositing, do it here:
+                # example keeps original size; uncomment to enforce a height:
+                # pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]"); plot_lbl = "[plot_hw]"
+                # Now download to system memory for CPU overlay / alpha
+                pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_sw]")
+                plot_lbl = "[plot_sw]"
+
+            # If alpha < 1, do RGBA + colorchannelmixer on CPU
+            if alpha < 1.0:
+                pre.append(
+                    f"{plot_lbl}format=rgba,colorchannelmixer=aa={alpha}[overlay_src]"
+                )
+                plot_lbl = "[overlay_src]"
+
+            filter_complex = "; ".join(
+                [*pre, f"[0:v]{plot_lbl}overlay={overlay_pos}"]
+            )
+
+            cmd = base + [
+                "-i",
+                str(video_path),
+                "-i",
+                str(plot_video_path),
+                "-filter_complex",
+                filter_complex,
+                "-c:v",
+                encoder,
+                *encoder_args,
+                "-c:a",
+                "copy",
+                "-movflags",
+                "+faststart",
+                str(output_path),
+            ]
+
+    # ===== STACK MODE (left/right/top/bottom) =====
+    else:
+        if position not in ("top", "bottom", "left", "right"):
+            raise ValueError(
+                f"Position '{position}' not valid for side-by-side mode. Use 'top', 'bottom', 'left', or 'right'."
+            )
+
+        pre = []
+        if setpts:
+            pre.append(setpts)
+
+        # For stack operations, decide whether to use GPU or CPU processing
+        # On VideoToolbox, CPU-only can be faster due to avoiding transfer overhead
+        use_cpu_only = cpu or force_cpu_for_stack
+        
+        if use_cpu_only or not backend:
+            # Pure CPU path for filtering - avoid GPU entirely to skip transfer overhead
+            # But we can still use hardware encoder for final encoding step
+            print(f"Using CPU-only path for stacking to avoid GPU-CPU transfer overhead")
+            print(f"Final encoder: {encoder}")
+            
+            # CPU scaling
+            if position in ("top", "bottom"):
+                pre.append(
+                    f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=1280:-2[plot_sw]"
+                )
+            else:
+                pre.append(
+                    f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=-2:1024[plot_sw]"
+                )
+            plot_lbl = "[plot_sw]"
+            
+            # Keep the original encoder selection (could be hardware encoder)
+            # encoder and encoder_args were already set above
+        else:
+            # Original GPU->CPU hybrid path for other backends where transfer cost is lower
+            print(f"Using GPU scaling + CPU stacking path with {backend.name}")
+            
+            # For VideoToolbox, upload to GPU first
+            if backend.needs_upload:
+                pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_uploaded]")
+                plot_lbl = "[plot_uploaded]"
+            
+            # VideoToolbox scale_vt doesn't handle -2 (auto-calc) well, use software scaling
+            if backend.needs_upload:
+                # Download first, then use CPU scaling which handles -2 properly
+                pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_downloaded]")
+                if position in ("top", "bottom"):
+                    # Match widths to a fixed target (avoid runtime dependent sizing)
+                    pre.append(f"[plot_downloaded]scale=1280:-2[plot_sw]")
+                else:
+                    # Match heights  
+                    pre.append(f"[plot_downloaded]scale=-2:1024[plot_sw]")
+                plot_lbl = "[plot_sw]"
+            else:
+                # CUDA/QSV/VAAPI can handle -2 in hardware scaling
+                if position in ("top", "bottom"):
+                    # Match widths to a fixed target (avoid runtime dependent sizing)
+                    pre.append(f"{plot_lbl}{backend.scale_filter}=1280:-2[plot_hw]")
+                else:
+                    # Match heights
+                    pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]")
+                plot_lbl = "[plot_hw]"
+                pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_sw]")
+                plot_lbl = "[plot_sw]"
+
+        # Stack
+        if position == "bottom":
+            stack = f"[0:v]{plot_lbl}vstack=inputs=2"
+        elif position == "top":
+            stack = f"{plot_lbl}[0:v]vstack=inputs=2"
+        elif position == "right":
+            stack = f"[0:v]{plot_lbl}hstack=inputs=2"
+        else:  # left
+            stack = f"{plot_lbl}[0:v]hstack=inputs=2"
+
+        filter_complex = "; ".join([*pre, stack])
+
+        # Build ffmpeg command
+        # For CPU-only filtering path, we still exclude GPU hw flags but can use HW encoder
+        cmd_base = base
+        if use_cpu_only and backend:
+            # Remove GPU acceleration flags but keep device init for encoder
+            cmd_base = [
+                "ffmpeg",
+                "-y", 
+                "-hide_banner",
+                "-loglevel",
+                COMBINE_FFMPEG_LOGLEVEL,
+                "-stats",
+            ]
+            # Only add device init if needed for encoder (VideoToolbox needs it)
+            if backend.name == "videotoolbox":
+                cmd_base.extend(["-init_hw_device", "videotoolbox=vt"])
+
+        cmd = cmd_base + [
+            "-i",
+            str(video_path),
+            "-i",
+            str(plot_video_path),
+            "-filter_complex",
+            filter_complex,
+            "-c:v",
+            encoder,
+            *encoder_args,
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+
+    print(f"Running ffmpeg command:{" ".join(cmd)}")
+    try:
         # Run ffmpeg (inherit stdio → progress bar; raise on error)
         subprocess.run(cmd, check=True)
         print(f"Successfully combined videos: {output_path}")
@@ -311,7 +353,4 @@ def combine_videos(
 
     except subprocess.CalledProcessError:
         print("ffmpeg failed.")
-        return False
-    except Exception as e:
-        print(f"Error combining videos: {e}")
         return False
