@@ -103,8 +103,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480)
     )
     plots.add_argument("--fps", type=float, default=30.0)
-    plots.add_argument("--left", type=int, default=250)
-    plots.add_argument("--right", type=int, default=250)
+    plots.add_argument(
+        "--left",
+        type=float,
+        default=250,
+        help="Window left (seconds if --xaxis=seconds/absolute, else frames)",
+    )
+    plots.add_argument(
+        "--right",
+        type=float,
+        default=250,
+        help="Window right (seconds if --xaxis=seconds/absolute, else frames)",
+    )
     plots.add_argument("--ratio", type=float, default=1.0)
     plots.add_argument("--xaxis", choices=("frames", "seconds", "absolute"), default="frames")
     # plot style
@@ -198,8 +208,18 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         "--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480)
     )
-    render.add_argument("--left", type=int, default=250)
-    render.add_argument("--right", type=int, default=250)
+    render.add_argument(
+        "--left",
+        type=float,
+        default=250,
+        help="Window left (seconds if --xaxis=seconds/absolute, else frames)",
+    )
+    render.add_argument(
+        "--right",
+        type=float,
+        default=250,
+        help="Window right (seconds if --xaxis=seconds/absolute, else frames)",
+    )
     render.add_argument("--xaxis", choices=("frames", "seconds", "absolute"), default="seconds")
     render.add_argument("--style", choices=("line", "bar"), default="line")
     render.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
@@ -260,6 +280,15 @@ def cmd_plots(args: argparse.Namespace) -> int:
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)
 
+    # Convert left/right when xaxis is seconds/absolute
+    plot_fps = float(args.fps) * float(args.ratio)
+    if args.xaxis in ("seconds", "absolute"):
+        left_samples = int(round(float(args.left) * plot_fps))
+        right_samples = int(round(float(args.right) * plot_fps))
+    else:
+        left_samples = int(round(float(args.left)))
+        right_samples = int(round(float(args.right)))
+
     out = generate_plot_videos(
         aligned_signal=sig,
         ratio=float(args.ratio),
@@ -270,8 +299,8 @@ def cmd_plots(args: argparse.Namespace) -> int:
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
         ylim=tuple(args.ylim) if args.ylim is not None else None,
-        left=int(args.left),
-        right=int(args.right),
+        left=left_samples,
+        right=right_samples,
         video_fps=float(args.fps),
         plot_size=tuple(args.plot_size),
         show_legend=show_legend,
@@ -364,6 +393,15 @@ def cmd_render(args: argparse.Namespace) -> int:
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)
 
+    # Convert left/right for render
+    plot_fps = float(base_fps) * float(args.ratio)
+    if args.xaxis in ("seconds", "absolute"):
+        left_samples = int(round(float(args.left) * plot_fps))
+        right_samples = int(round(float(args.right) * plot_fps))
+    else:
+        left_samples = int(round(float(args.left)))
+        right_samples = int(round(float(args.right)))
+
     plot_path = generate_plot_videos(
         aligned_signal=aligned,
         ratio=float(args.ratio),
@@ -374,8 +412,8 @@ def cmd_render(args: argparse.Namespace) -> int:
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
         ylim=tuple(args.ylim) if args.ylim is not None else None,
-        left=int(args.left),
-        right=int(args.right),
+        left=left_samples,
+        right=right_samples,
         video_fps=base_fps,
         plot_size=tuple(args.plot_size),
         show_legend=show_legend,
