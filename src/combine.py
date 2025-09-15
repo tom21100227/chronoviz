@@ -260,7 +260,10 @@ def combine_videos(
         if use_cpu_only or not backend:
             # Pure CPU path for filtering - avoid GPU entirely to skip transfer overhead
             # But we can still use hardware encoder for final encoding step
-            print("Using CPU-only path for stacking to avoid GPU-CPU transfer overhead")
+
+            print(
+                "Using CPU-only path for stacking to avoid GPU-CPU transfer overhead"
+            )
             print(f"Final encoder: {encoder}")
 
             # CPU scaling
