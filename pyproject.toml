@@ -18,6 +18,19 @@ dependencies = [
     "wgpu>=0.22.2",
 ]
 
+[project.scripts]
+chronoviz = "src.cli:cli_main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
 [project.optional-dependencies]
 hdf5 = [
     "tables>=3.10.2",

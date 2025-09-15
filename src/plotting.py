@@ -125,11 +125,6 @@ def generate_plot_videos(
                 **kwargs,
             )
         case "grid":
-            if grid is None:
-                warnings.warn(
-                    "grid not specified for 'grid' mode; automatically determining layout.",
-                    RuntimeWarning,
-                )
             out = output_dir / "signals_plot_grid"
             return render_grid(
                 signals=sig,
