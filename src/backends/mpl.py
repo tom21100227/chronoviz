@@ -570,3 +570,255 @@ def render_grid(
         final_path = writer.close()
 
     return final_path
+
+
+# === Bar plot renderers ===
+
+def _bar_values_vec(sig: np.ndarray, i: int, agg: str, window: int) -> np.ndarray:
+    N, C = sig.shape
+    if agg == "instant" or window <= 1:
+        idx = i if i < N else N - 1
+        return sig[idx, :]
+    # aggregate over [i-window+1, i]
+    s = i - window + 1
+    if s < 0:
+        s = 0
+    e = i + 1
+    win = sig[s:e, :]
+    if agg == "mean":
+        return np.nanmean(win, axis=0)
+    else:  # "max"
+        return np.nanmax(win, axis=0)
+
+
+def _pick_colors(n: int):
+    colors = plt.get_cmap("tab10").colors
+    return [colors[i % len(colors)] for i in range(n)]
+
+
+def render_all_channels_bar(
+    signals: np.ndarray,
+    out_path: str | Path,
+    fps: float,
+    size: tuple[int, int],
+    ylim: tuple[float, float] | None = None,
+    col_names: List[str] | None = None,
+    bar_mode: str = "grouped",
+    bar_agg: str = "instant",
+    bar_window: int = 1,
+    alpha: bool = False,
+    writer: FrameWriter | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    axis_kwargs: dict | None = None,
+) -> Path:
+    """Combined bar plot: all channels in one Axes, streamed to FFmpeg."""
+    sig = np.asarray(signals, dtype=np.float32)
+    if sig.ndim == 1:
+        sig = sig[:, None]
+    N, C = sig.shape
+    if N == 0:
+        raise ValueError("signal is empty")
+
+    if (col_names is None) or (len(col_names) != C):
+        col_names = [f"ch{c}" for c in range(C)]
+
+    if ylim is not None:
+        clamp_nan_2d(sig, ylim[0], ylim[1])
+
+    W, H = int(size[0]), int(size[1])
+    dpi = 100
+    figsize = (W / dpi, H / dpi)
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+
+    _lightweight_axes(ax)
+    ax.set_facecolor("white")
+    for spine in ax.spines.values():
+        spine.set_linewidth(1)
+
+    # y-limits
+    ylo, yhi = _compute_ylim(sig, ylim)
+    ax.set_ylim(ylo, yhi)
+    ax.set_autoscaley_on(False)
+
+    # x for grouped or stacked
+    colors = _pick_colors(C)
+    rects: List[plt.Rectangle] = []  # type: ignore[name-defined]
+    if bar_mode == "stacked":
+        x0 = 0.0
+        width = 0.8
+        bottom = 0.0
+        for c in range(C):
+            r = plt.Rectangle((x0 - width / 2, bottom), width, 0.0, color=colors[c], animated=True, label=col_names[c])
+            ax.add_patch(r)
+            rects.append(r)
+        ax.set_xlim(-1.0, 1.0)
+        ax.set_xticks([])
+    else:  # grouped
+        xs = np.arange(C, dtype=float)
+        width = 0.8
+        for c in range(C):
+            (r,) = ax.bar([xs[c]], [0.0], width=width, color=colors[c], label=col_names[c], animated=True)
+            rects.append(r)
+        ax.set_xlim(-0.5, C - 0.5)
+        # lightweight tick labels
+        ax.set_xticks(xs)
+        if C <= 12:
+            ax.set_xticklabels(col_names)
+        else:
+            ax.set_xticklabels([])
+
+    # Labels and customizations
+    _apply_axis_customizations(ax, xlabel, ylabel, axis_kwargs)
+
+    # Draw and cache background
+    fig.tight_layout(pad=0)
+    fig.canvas.draw()
+    background = fig.canvas.copy_from_bbox(ax.bbox)
+
+    if writer is None:
+        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
+    rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
+
+    try:
+        for i in range(N):
+            vals = _bar_values_vec(sig, i, bar_agg, int(max(1, bar_window)))
+            # Update rectangles
+            if bar_mode == "stacked":
+                bottom = 0.0
+                for c in range(C):
+                    h = float(vals[c])
+                    if h < 0:
+                        h = 0.0  # keep simple: ignore negative in stacking
+                    rects[c].set_y(bottom)
+                    rects[c].set_height(h)
+                    bottom += h
+            else:
+                for c in range(C):
+                    rects[c].set_height(float(vals[c]))
+
+            # Blit
+            fig.canvas.restore_region(background)
+            for r in rects:
+                ax.draw_artist(r)
+            fig.canvas.blit(ax.bbox)
+
+            if USE_RGB24:
+                argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
+                rgb[...] = argb[:, :, 1:4]
+                writer.write_frame(memoryview(rgb))
+            else:
+                writer.write_frame(memoryview(fig.canvas.buffer_rgba()))
+    finally:
+        plt.close(fig)
+        final_path = writer.close()
+
+    return final_path
+
+
+def render_grid_bar(
+    signals: np.ndarray,
+    out_path: str | Path,
+    fps: float,
+    grid: Tuple[int, int] | None,
+    size: tuple[int, int],
+    ylim: tuple[float, float] | None = None,
+    col_names: List[str] | None = None,
+    bar_mode: str = "grouped",
+    bar_agg: str = "instant",
+    bar_window: int = 1,
+    alpha: bool = False,
+    writer: FrameWriter | None = None,
+    xlabel: str | None = None,
+    ylabel: str | None = None,
+    axis_kwargs: dict | None = None,
+) -> Path:
+    """Grid of bars: each channel in its own subplot; one bar per axes."""
+    sig = np.asarray(signals, dtype=np.float32)
+    if sig.ndim == 1:
+        sig = sig[:, None]
+    N, C = sig.shape
+    if N == 0:
+        raise ValueError("signal is empty")
+
+    if (col_names is None) or (len(col_names) != C):
+        col_names = [f"ch{c}" for c in range(C)]
+
+    if ylim is not None:
+        clamp_nan_2d(sig, ylim[0], ylim[1])
+
+    # Determine grid
+    if grid is None:
+        rows = int(np.ceil(np.sqrt(C)))
+        cols = int(np.ceil(C / rows))
+        grid = (rows, cols)
+    rows, cols = grid
+    if rows * cols < C:
+        raise ValueError(f"Grid {grid} too small for {C} channels")
+
+    W, H = int(size[0]), int(size[1])
+    dpi = 100
+    figsize = (W / dpi, H / dpi)
+    fig, axes = plt.subplots(rows, cols, figsize=figsize, dpi=dpi)
+
+    if rows == 1 and cols == 1:
+        axes = [axes]
+    elif rows == 1 or cols == 1:
+        axes = axes.flatten()
+    else:
+        axes = axes.flatten()
+
+    colors = _pick_colors(C)
+    rects: List[plt.Rectangle] = []  # type: ignore[name-defined]
+
+    # Setup axes and one bar per channel
+    for c in range(C):
+        ax = axes[c]
+        _lightweight_axes(ax)
+        ax.set_facecolor("white")
+        for spine in ax.spines.values():
+            spine.set_linewidth(1)
+        ylo, yhi = _compute_ylim(sig[:, c : c + 1], ylim)
+        ax.set_ylim(ylo, yhi)
+        ax.set_autoscaley_on(False)
+        ax.set_xlim(-1.0, 1.0)
+        ax.set_xticks([])
+        (r,) = ax.bar([0.0], [0.0], width=0.6, color=colors[c], animated=True)
+        rects.append(r)
+        ax.set_title(col_names[c], fontsize=8, pad=2)
+        _apply_axis_customizations(ax, xlabel, ylabel, axis_kwargs)
+
+    # Hide unused subplots
+    for c in range(C, len(axes)):
+        axes[c].set_visible(False)
+
+    fig.tight_layout(pad=0.5)
+    fig.canvas.draw()
+    background = fig.canvas.copy_from_bbox(fig.bbox)
+
+    if writer is None:
+        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
+    rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
+
+    try:
+        for i in range(N):
+            vals = _bar_values_vec(sig, i, bar_agg, int(max(1, bar_window)))
+            for c in range(C):
+                rects[c].set_height(float(vals[c]))
+
+            fig.canvas.restore_region(background)
+            for c in range(C):
+                axes[c].draw_artist(rects[c])
+            fig.canvas.blit(fig.bbox)
+
+            if USE_RGB24:
+                argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
+                rgb[...] = argb[:, :, 1:4]
+                writer.write_frame(memoryview(rgb))
+            else:
+                writer.write_frame(memoryview(fig.canvas.buffer_rgba()))
+    finally:
+        plt.close(fig)
+        final_path = writer.close()
+
+    return final_path

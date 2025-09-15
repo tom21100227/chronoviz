@@ -7,7 +7,13 @@ import warnings
 from pathlib import Path
 from typing import Optional
 from src.utils import _global_ylim
-from src.backends.mpl import render_one_channel, render_all_channels, render_grid
+from src.backends.mpl import (
+    render_one_channel,
+    render_all_channels,
+    render_grid,
+    render_all_channels_bar,
+    render_grid_bar,
+)
 
 
 def generate_plot_videos(
@@ -15,6 +21,7 @@ def generate_plot_videos(
     ratio: float,
     output_dir: str | Path,
     mode: str = "grid",  # "separate", "combine", "grid"
+    style: str = "line",  # "line" or "bar"
     grid: Optional[tuple[int, int]] = None,
     col_names: Optional[list[str]] = None,
     ylim: Optional[tuple[float, float]] = None,
@@ -25,6 +32,10 @@ def generate_plot_videos(
     show_legend: bool = False,
     show_values: bool = False,
     backend: str = "matplotlib",
+    # bar-specific options
+    bar_mode: str | None = None,  # "grouped" or "stacked"
+    bar_agg: str | None = None,   # "instant", "mean", "max"
+    bar_window: int | None = None,
     **kwargs,
 ) -> Path:
     """
@@ -36,6 +47,7 @@ def generate_plot_videos(
         - ratio: ratio of signal sampling rate to video frame rate
         - output_dir: directory to save the output video(s)
         - mode: one of 'separate' (one video per channel), 'combine' (all channels in one plot), or 'grid' (grid of subplots)
+        - style: 'line' (sliding-window line) or 'bar' (instant/aggregated bar values)
         - grid: tuple specifying the grid layout (rows, cols) for subplots when not combining plots, must be large enough to hold all channels
         - col_names: optional list of column names for the signal channels
         - ylim: optional tuple specifying y-axis limits for the plots. If None, auto-scale based on data.
@@ -49,6 +61,9 @@ def generate_plot_videos(
         - show_values: if True, display current signal values on the plot
         - backend: plotting backend to use, currently only 'matplotlib' is supported,
           but I plan to support pygfx (or fastplotlib) in the future for better performance.
+        - bar_mode: for style='bar', choose 'grouped' (one bar per channel) or 'stacked' (stack all channels)
+        - bar_agg: for style='bar', choose how to aggregate values per frame: 'instant' (current), 'mean' or 'max' over a window
+        - bar_window: window size (frames) used with bar_agg in {'mean','max'}; ignored for 'instant'
 
     Returns:
         - the absolute path to the output video (or directory containing multiple videos)
@@ -92,48 +107,96 @@ def generate_plot_videos(
     # Dispatch to the chosen renderer
     match mode:
         case "separate":
-            for c in range(C):
-                out = output_dir / f"{col_names[c]}_plot"
-                # alpha=False by default; change to True if you want transparent .webm
-                render_one_channel(
-                    signal=sig[:, c],
+            if style == "line":
+                for c in range(C):
+                    out = output_dir / f"{col_names[c]}_plot"
+                    render_one_channel(
+                        signal=sig[:, c],
+                        out_path=out,
+                        left=left,
+                        right=right,
+                        fps=plot_fps,
+                        size=plot_size,
+                        ylim=global_ylim,
+                        title=col_names[c],
+                        alpha=False,
+                        **kwargs,
+                    )
+                return output_dir
+            else:
+                # For bar style, reuse grid renderer: one bar per subplot
+                out = output_dir / "signals_plot_grid"
+                return render_grid_bar(
+                    signals=sig,
+                    out_path=out,
+                    fps=plot_fps,
+                    grid=(C, 1) if grid is None else grid,
+                    size=plot_size,
+                    col_names=col_names,
+                    ylim=global_ylim,
+                    bar_mode=(bar_mode or "grouped"),
+                    bar_agg=(bar_agg or "instant"),
+                    bar_window=(bar_window or 1),
+                    alpha=False,
+                    **kwargs,
+                )
+        case "combine":
+            out = output_dir / "signals_plot_combined"
+            if style == "line":
+                return render_all_channels(
+                    signals=sig,
                     out_path=out,
                     left=left,
                     right=right,
                     fps=plot_fps,
                     size=plot_size,
-                    ylim=global_ylim,  # or None if you want per-channel limits
-                    title=col_names[c],
+                    col_names=col_names if show_legend else None,
+                    ylim=global_ylim,
                     alpha=False,
                     **kwargs,
                 )
-            return output_dir
-        case "combine":
-            out = output_dir / "signals_plot_combined"
-            return render_all_channels(
-                signals=sig,
-                out_path=out,
-                left=left,
-                right=right,
-                fps=plot_fps,
-                size=plot_size,
-                col_names=col_names if show_legend else None,
-                ylim=global_ylim,
-                alpha=False,  # set True to get transparent .webm
-                **kwargs,
-            )
+            else:
+                return render_all_channels_bar(
+                    signals=sig,
+                    out_path=out,
+                    fps=plot_fps,
+                    size=plot_size,
+                    col_names=col_names if show_legend else None,
+                    ylim=global_ylim,
+                    bar_mode=(bar_mode or "grouped"),
+                    bar_agg=(bar_agg or "instant"),
+                    bar_window=(bar_window or 1),
+                    alpha=False,
+                    **kwargs,
+                )
         case "grid":
             out = output_dir / "signals_plot_grid"
-            return render_grid(
-                signals=sig,
-                out_path=out,
-                left=left,
-                right=right,
-                fps=plot_fps,
-                grid=grid,
-                size=plot_size,
-                col_names=col_names,
-                ylim=global_ylim,
-                alpha=False,  # set True to get transparent .webm
-                **kwargs,
-            )
+            if style == "line":
+                return render_grid(
+                    signals=sig,
+                    out_path=out,
+                    left=left,
+                    right=right,
+                    fps=plot_fps,
+                    grid=grid,
+                    size=plot_size,
+                    col_names=col_names,
+                    ylim=global_ylim,
+                    alpha=False,
+                    **kwargs,
+                )
+            else:
+                return render_grid_bar(
+                    signals=sig,
+                    out_path=out,
+                    fps=plot_fps,
+                    grid=grid,
+                    size=plot_size,
+                    col_names=col_names,
+                    ylim=global_ylim,
+                    bar_mode=(bar_mode or "grouped"),
+                    bar_agg=(bar_agg or "instant"),
+                    bar_window=(bar_window or 1),
+                    alpha=False,
+                    **kwargs,
+                )

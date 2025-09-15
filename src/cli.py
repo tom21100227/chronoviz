@@ -106,6 +106,12 @@ def build_parser() -> argparse.ArgumentParser:
     plots.add_argument("--left", type=int, default=250)
     plots.add_argument("--right", type=int, default=250)
     plots.add_argument("--ratio", type=float, default=1.0)
+    # plot style
+    plots.add_argument("--style", choices=("line", "bar"), default="line")
+    plots.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
+    plots.add_argument("--bar-agg", choices=("instant", "mean", "max"), default="instant")
+    plots.add_argument("--bar-window", type=int, default=15,
+                       help="Window size (frames) for bar aggregation when using mean/max")
     plots.add_argument("--xlabel", type=str, default=None)
     plots.add_argument("--ylabel", type=str, default=None)
     legend_group = plots.add_mutually_exclusive_group()
@@ -193,6 +199,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render.add_argument("--left", type=int, default=250)
     render.add_argument("--right", type=int, default=250)
+    render.add_argument("--style", choices=("line", "bar"), default="line")
+    render.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
+    render.add_argument("--bar-agg", choices=("instant", "mean", "max"), default="instant")
+    render.add_argument("--bar-window", type=int, default=15)
     render.add_argument("--xlabel", type=str, default=None)
     render.add_argument("--ylabel", type=str, default=None)
     legend_group_r = render.add_mutually_exclusive_group()
@@ -250,6 +260,7 @@ def cmd_plots(args: argparse.Namespace) -> int:
         ratio=float(args.ratio),
         output_dir=args.output,
         mode=args.mode,
+        style=args.style,
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
         ylim=tuple(args.ylim) if args.ylim is not None else None,
@@ -258,6 +269,9 @@ def cmd_plots(args: argparse.Namespace) -> int:
         video_fps=float(args.fps),
         plot_size=tuple(args.plot_size),
         show_legend=show_legend,
+        bar_mode=args.bar_mode,
+        bar_agg=args.bar_agg,
+        bar_window=int(args.bar_window),
         xlabel=xlabel,
         ylabel=ylabel,
     )
@@ -346,6 +360,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         ratio=float(args.ratio),
         output_dir=plots_dir,
         mode=args.mode,
+        style=args.style,
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
         ylim=tuple(args.ylim) if args.ylim is not None else None,
@@ -354,6 +369,9 @@ def cmd_render(args: argparse.Namespace) -> int:
         video_fps=base_fps,
         plot_size=tuple(args.plot_size),
         show_legend=show_legend,
+        bar_mode=args.bar_mode,
+        bar_agg=args.bar_agg,
+        bar_window=int(args.bar_window),
         xlabel=xlabel,
         ylabel=ylabel,
     )
