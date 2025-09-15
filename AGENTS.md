@@ -11,24 +11,45 @@ The core pipeline consists of:
 
 The project uses `uv` for dependency management.
 
-**To install dependencies:**
-```bash
-uv pip install -r requirements.txt
-```
-or if you have `uv` installed:
-```bash
-uv sync
-```
+Prerequisites
+- Python 3.12+
+- FFmpeg + FFprobe on PATH (`ffmpeg`, `ffprobe`)
+- `uv` installed
 
-**To run the main application:**
-```bash
-python main.py
-```
-The main script in `main.py` processes a sample video and CSV file from the `test_data` directory. You can modify this file to process your own data.
+Install environment
+- `uv sync`
+- Optional (to force install console scripts): `uv pip install -e .`
+
+Run via CLI (preferred)
+- Help: `chronoviz --help`
+- One‑shot render (align → plots → combine):
+  ```bash
+  chronoviz render -v /path/to/video.mp4 -s /path/to/data.csv -o /tmp/final.mp4 -m grid --grid 6 1 --ylim 0 100 -c
+  ```
+- Plots only:
+  ```bash
+  chronoviz plots -s /path/to/data.csv -o /tmp/plots -m grid --grid 6 1
+  ```
+- Combine only:
+  ```bash
+  chronoviz combine -v /path/to/video.mp4 -P /tmp/plots/signals_plot_grid.mp4 -o /tmp/combined.mp4 -p right -c
+  ```
+
+Fallback (module or script)
+- `python -m src.cli --help`
+- `python main.py --help`
+
+Notes
+- ROI CSVs with columns `frame, roi_name, percentage_in_roi` are auto‑pivoted. For HDF5, pass `--signals-key`.
+- Corner positions (`tr`, `tl`, `br`, `bl`) require `--overlay`. Use `-a/--alpha` to control transparency.
+- Use `-c/--cpu` to force CPU paths; GPU is used opportunistically if detected.
+- Auto legend: default on for `-m combine` with ≤10 channels; override with `-l/--legend` or `--no-legend`.
+- Default output file (render): if `-o` omitted (and not `--plots-only`), writes `<video_stem>_with_plots.mp4` next to input.
+- Verbosity: `-q/--quiet` to suppress non‑error prints; `--verbose` for extra diagnostics.
 
 **To run tests:**
 ```bash
-pytest
+pytest -q
 ```
 
 ## Development Conventions
@@ -43,3 +64,8 @@ You can run the linter and formatter with:
 ruff check .
 black .
 ```
+
+## Agent Hints
+- Follow `STEPS.md` for milestone sequencing and human validation points.
+- Keep changes focused; avoid refactors outside the current step.
+- Prefer CPU paths for deterministic baseline performance; GPU is optional.
