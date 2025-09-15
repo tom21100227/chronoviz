@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 
 from .utils import (
+    get_video_height,
     pick_video_encoder,
     _ffmpeg_supports_filter,
     _ffmpeg_has_encoder,
@@ -83,6 +84,11 @@ def combine_videos(
     plot_video_path = Path(plot_video_path)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    video_height = get_video_height(video_path)
+    if video_height == 0:
+        print("Could not determine video height, aborting.")
+        return False
 
     # Try to use a GPU backend (for scale and possibly overlay)
     backend = _select_backend(require_alpha=(alpha < 1.0)) if not cpu else None
@@ -256,11 +262,11 @@ def combine_videos(
             # CPU scaling
             if position in ("top", "bottom"):
                 pre.append(
-                    f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=1280:-2[plot_sw]"
+                    f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=-1:{video_height}[plot_sw]"
                 )
             else:
                 pre.append(
-                    f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=-2:1024[plot_sw]"
+                    f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=-2:{video_height}[plot_sw]"
                 )
             plot_lbl = "[plot_sw]"
             
@@ -281,19 +287,19 @@ def combine_videos(
                 pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_downloaded]")
                 if position in ("top", "bottom"):
                     # Match widths to a fixed target (avoid runtime dependent sizing)
-                    pre.append(f"[plot_downloaded]scale=1280:-2[plot_sw]")
+                    pre.append(f"[plot_downloaded]scale=-1:{video_height}[plot_sw]")
                 else:
                     # Match heights  
-                    pre.append(f"[plot_downloaded]scale=-2:1024[plot_sw]")
+                    pre.append(f"[plot_downloaded]scale=-2:{video_height}[plot_sw]")
                 plot_lbl = "[plot_sw]"
             else:
                 # CUDA/QSV/VAAPI can handle -2 in hardware scaling
                 if position in ("top", "bottom"):
                     # Match widths to a fixed target (avoid runtime dependent sizing)
-                    pre.append(f"{plot_lbl}{backend.scale_filter}=1280:-2[plot_hw]")
+                    pre.append(f"{plot_lbl}{backend.scale_filter}=-1:{video_height}[plot_hw]")
                 else:
                     # Match heights
-                    pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]")
+                    pre.append(f"{plot_lbl}{backend.scale_filter}=-2:{video_height}[plot_hw]")
                 plot_lbl = "[plot_hw]"
                 pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_sw]")
                 plot_lbl = "[plot_sw]"

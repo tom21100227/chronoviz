@@ -10,6 +10,9 @@ wheels/
 .venv
 *.DS_Store*
 
-test_data/slp
+test_data/_internal
+
 
 .vscode
+
+.env

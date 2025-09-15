@@ -5,6 +5,30 @@ from typing import Optional, Tuple, List
 import warnings
 
 
+def get_video_height(video_path: str) -> int:
+    """Get the height of a video using ffprobe."""
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=height",
+                "-of",
+                "csv=s=x:p=0",
+                str(video_path),
+            ],
+            text=True,
+        )
+        return int(out.strip())
+    except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
+        warnings.warn(f"Could not get video height for {video_path}: {e}", RuntimeWarning)
+        return 0
+
+
 def _global_ylim(
     sig: np.ndarray, ylim: Optional[Tuple[float, float]] = None
 ) -> Tuple[float, float]:
