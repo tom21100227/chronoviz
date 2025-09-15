@@ -50,7 +50,9 @@ def _compute_legend(legend_flag: Optional[bool], mode: str, num_channels: int) -
     return mode == "combine" and num_channels <= 10
 
 
-def _ensure_tools(need_ffmpeg: bool = True, need_ffprobe: bool = False, quiet: bool = False) -> None:
+def _ensure_tools(
+    need_ffmpeg: bool = True, need_ffprobe: bool = False, quiet: bool = False
+) -> None:
     missing = []
     if need_ffmpeg and not _has_cmd("ffmpeg"):
         missing.append("ffmpeg")
@@ -65,19 +67,41 @@ def _ensure_tools(need_ffmpeg: bool = True, need_ffprobe: bool = False, quiet: b
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="chronoviz", description="ChronoViz CLI")
-    p.add_argument("-q", "--quiet", action="store_true", help="Suppress non-error output")
+    p.add_argument(
+        "-q", "--quiet", action="store_true", help="Suppress non-error output"
+    )
     p.add_argument("--verbose", action="store_true", help="Extra diagnostics")
     sub = p.add_subparsers(dest="command", required=True)
 
     # plots
-    plots = sub.add_parser("plots", help="Generate plot video(s) from a signals file (CSV/HDF5)")
-    plots.add_argument("-s", "--signals", type=Path, required=True, help="Path to CSV/HDF5")
-    plots.add_argument("--signals-key", type=str, default=None, help="Dataset key for HDF5")
-    plots.add_argument("-o", "--output", type=Path, required=True, help="Directory to write plot video(s)")
-    plots.add_argument("-m", "--mode", choices=("grid", "combine", "separate"), default="grid")
-    plots.add_argument("--grid", nargs=2, metavar=("ROWS", "COLS"), type=int, default=None)
-    plots.add_argument("--ylim", nargs=2, metavar=("LO", "HI"), type=float, default=None)
-    plots.add_argument("--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480))
+    plots = sub.add_parser(
+        "plots", help="Generate plot video(s) from a signals file (CSV/HDF5)"
+    )
+    plots.add_argument(
+        "-s", "--signals", type=Path, required=True, help="Path to CSV/HDF5"
+    )
+    plots.add_argument(
+        "--signals-key", type=str, default=None, help="Dataset key for HDF5"
+    )
+    plots.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=True,
+        help="Directory to write plot video(s)",
+    )
+    plots.add_argument(
+        "-m", "--mode", choices=("grid", "combine", "separate"), default="grid"
+    )
+    plots.add_argument(
+        "--grid", nargs=2, metavar=("ROWS", "COLS"), type=int, default=None
+    )
+    plots.add_argument(
+        "--ylim", nargs=2, metavar=("LO", "HI"), type=float, default=None
+    )
+    plots.add_argument(
+        "--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480)
+    )
     plots.add_argument("--fps", type=float, default=30.0)
     plots.add_argument("--left", type=int, default=250)
     plots.add_argument("--right", type=int, default=250)
@@ -85,16 +109,42 @@ def build_parser() -> argparse.ArgumentParser:
     plots.add_argument("--xlabel", type=str, default=None)
     plots.add_argument("--ylabel", type=str, default=None)
     legend_group = plots.add_mutually_exclusive_group()
-    legend_group.add_argument("-l", "--legend", action="store_true", dest="legend", help="Force legend on (combine mode)")
-    legend_group.add_argument("--no-legend", action="store_false", dest="legend", help="Force legend off")
+    legend_group.add_argument(
+        "-l",
+        "--legend",
+        action="store_true",
+        dest="legend",
+        help="Force legend on (combine mode)",
+    )
+    legend_group.add_argument(
+        "--no-legend", action="store_false", dest="legend", help="Force legend off"
+    )
     plots.set_defaults(legend=None)
 
     # combine
-    combine = sub.add_parser("combine", help="Combine a base video with a plot video (stack or overlay)")
-    combine.add_argument("-v", "--video", type=Path, required=True, help="Path to base video")
-    combine.add_argument("-P", "--plot-video", dest="plot_video", type=Path, required=True, help="Path to plot video")
-    combine.add_argument("-o", "--output", type=Path, required=True, help="Output video path")
-    combine.add_argument("-p", "--position", choices=("top", "bottom", "left", "right", "tr", "tl", "br", "bl"), default="right")
+    combine = sub.add_parser(
+        "combine", help="Combine a base video with a plot video (stack or overlay)"
+    )
+    combine.add_argument(
+        "-v", "--video", type=Path, required=True, help="Path to base video"
+    )
+    combine.add_argument(
+        "-P",
+        "--plot-video",
+        dest="plot_video",
+        type=Path,
+        required=True,
+        help="Path to plot video",
+    )
+    combine.add_argument(
+        "-o", "--output", type=Path, required=True, help="Output video path"
+    )
+    combine.add_argument(
+        "-p",
+        "--position",
+        choices=("top", "bottom", "left", "right", "tr", "tl", "br", "bl"),
+        default="right",
+    )
     combine.add_argument("--overlay", action="store_true")
     combine.add_argument("-a", "--alpha", type=float, default=1.0)
     combine.add_argument("-r", "--ratio", type=float, default=1.0)
@@ -103,33 +153,79 @@ def build_parser() -> argparse.ArgumentParser:
 
     # render
     render = sub.add_parser("render", help="One-shot: read/align → plots → combine")
-    render.add_argument("-v", "--video", type=Path, required=True, help="Path to base video")
-    render.add_argument("-s", "--signals", type=Path, required=True, help="Path to CSV/HDF5")
-    render.add_argument("-o", "--output", type=Path, required=False, help="Final combined video (.mp4). Required unless --plots-only")
-    render.add_argument("-O", "--plots-output", type=Path, default=None, help="Directory for intermediate plot video(s)")
-    render.add_argument("--signals-key", type=str, default=None, help="HDF5 dataset key")
+    render.add_argument(
+        "-v", "--video", type=Path, required=True, help="Path to base video"
+    )
+    render.add_argument(
+        "-s", "--signals", type=Path, required=True, help="Path to CSV/HDF5"
+    )
+    render.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        required=False,
+        help="Final combined video (.mp4). Required unless --plots-only",
+    )
+    render.add_argument(
+        "-O",
+        "--plots-output",
+        type=Path,
+        default=None,
+        help="Directory for intermediate plot video(s)",
+    )
+    render.add_argument(
+        "--signals-key", type=str, default=None, help="HDF5 dataset key"
+    )
     render.add_argument("--align-mode", choices=("resample", "pad"), default="resample")
     render.add_argument("--padding-mode", type=str, default="edge")
     render.add_argument("--ratio", type=float, default=1.0)
-    render.add_argument("-m", "--mode", choices=("grid", "combine", "separate"), default="grid")
-    render.add_argument("--grid", nargs=2, metavar=("ROWS", "COLS"), type=int, default=None)
-    render.add_argument("--ylim", nargs=2, metavar=("LO", "HI"), type=float, default=None)
-    render.add_argument("--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480))
+    render.add_argument(
+        "-m", "--mode", choices=("grid", "combine", "separate"), default="grid"
+    )
+    render.add_argument(
+        "--grid", nargs=2, metavar=("ROWS", "COLS"), type=int, default=None
+    )
+    render.add_argument(
+        "--ylim", nargs=2, metavar=("LO", "HI"), type=float, default=None
+    )
+    render.add_argument(
+        "--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480)
+    )
     render.add_argument("--left", type=int, default=250)
     render.add_argument("--right", type=int, default=250)
     render.add_argument("--xlabel", type=str, default=None)
     render.add_argument("--ylabel", type=str, default=None)
     legend_group_r = render.add_mutually_exclusive_group()
-    legend_group_r.add_argument("-l", "--legend", action="store_true", dest="legend", help="Force legend on (combine mode)")
-    legend_group_r.add_argument("--no-legend", action="store_false", dest="legend", help="Force legend off")
+    legend_group_r.add_argument(
+        "-l",
+        "--legend",
+        action="store_true",
+        dest="legend",
+        help="Force legend on (combine mode)",
+    )
+    legend_group_r.add_argument(
+        "--no-legend", action="store_false", dest="legend", help="Force legend off"
+    )
     render.set_defaults(legend=None)
-    render.add_argument("-p", "--position", choices=("top", "bottom", "left", "right", "tr", "tl", "br", "bl"), default="right")
+    render.add_argument(
+        "-p",
+        "--position",
+        choices=("top", "bottom", "left", "right", "tr", "tl", "br", "bl"),
+        default="right",
+    )
     render.add_argument("--overlay", action="store_true")
     render.add_argument("-a", "--alpha", type=float, default=1.0)
     render.add_argument("-c", "--cpu", action="store_true")
     render.add_argument("--force-cpu-for-stack", action="store_true")
-    render.add_argument("--fps", type=float, default=None, help="Override detected base video FPS for plotting")
-    render.add_argument("--plots-only", action="store_true", help="Generate plots only; skip combine")
+    render.add_argument(
+        "--fps",
+        type=float,
+        default=None,
+        help="Override detected base video FPS for plotting",
+    )
+    render.add_argument(
+        "--plots-only", action="store_true", help="Generate plots only; skip combine"
+    )
 
     return p
 
@@ -207,7 +303,9 @@ def cmd_render(args: argparse.Namespace) -> int:
         vid = Path(args.video)
         args.output = vid.with_name(f"{vid.stem}_with_plots.mp4")
     if args.mode == "separate" and not args.plots_only:
-        raise SystemExit("combine step requires a single plot video; use mode grid or combine")
+        raise SystemExit(
+            "combine step requires a single plot video; use mode grid or combine"
+        )
     if not args.overlay and args.position in ("tr", "tl", "br", "bl"):
         raise SystemExit("corner positions only valid with --overlay")
     if not args.overlay and args.alpha != 1.0:

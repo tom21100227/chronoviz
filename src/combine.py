@@ -61,7 +61,7 @@ def combine_videos(
     overlay: bool = False,
     alpha: float = 1,
     cpu: bool = False,
-    force_cpu_for_stack: bool = False
+    force_cpu_for_stack: bool = False,
 ) -> bool:
     """
     Combine original video with plot video. Prefers GPU paths when possible.
@@ -94,12 +94,14 @@ def combine_videos(
     backend = _select_backend(require_alpha=(alpha < 1.0)) if not cpu else None
     if force_cpu_for_stack is None:
         force_cpu_for_stack = (
-            not overlay and  # Only affects stack operations
-            backend and 
-            backend.name == "videotoolbox"  # VideoToolbox has expensive transfers
+            not overlay  # Only affects stack operations
+            and backend
+            and backend.name == "videotoolbox"  # VideoToolbox has expensive transfers
         )
         if force_cpu_for_stack:
-            print("Auto-enabling CPU-only processing for stack operations on VideoToolbox to avoid GPU-CPU transfer overhead")
+            print(
+                "Auto-enabling CPU-only processing for stack operations on VideoToolbox to avoid GPU-CPU transfer overhead"
+            )
 
     have_gpu_overlay = False
     if backend and backend.overlay_filter:
@@ -149,14 +151,16 @@ def combine_videos(
             pre = []
             if setpts:
                 pre.append(setpts)
-            
+
             # For VideoToolbox, upload both inputs to GPU
             if backend.needs_upload:
                 # Upload main video to GPU
                 pre.append("[0:v]hwupload=derive_device=videotoolbox[main_hw]")
                 # Upload plot video to GPU (handling setpts label)
                 if setpts:
-                    pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]")
+                    pre.append(
+                        f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]"
+                    )
                 else:
                     pre.append("[1:v]hwupload=derive_device=videotoolbox[plot_hw]")
                 main_lbl = "[main_hw]"
@@ -200,9 +204,11 @@ def combine_videos(
             if backend:
                 # For VideoToolbox, upload to GPU first
                 if backend.needs_upload:
-                    pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]")
+                    pre.append(
+                        f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_hw]"
+                    )
                     plot_lbl = "[plot_hw]"
-                
+
                 # If you want to resize the overlay prior to compositing, do it here:
                 # example keeps original size; uncomment to enforce a height:
                 # pre.append(f"{plot_lbl}{backend.scale_filter}=-2:1024[plot_hw]"); plot_lbl = "[plot_hw]"
@@ -217,9 +223,7 @@ def combine_videos(
                 )
                 plot_lbl = "[overlay_src]"
 
-            filter_complex = "; ".join(
-                [*pre, f"[0:v]{plot_lbl}overlay={overlay_pos}"]
-            )
+            filter_complex = "; ".join([*pre, f"[0:v]{plot_lbl}overlay={overlay_pos}"])
 
             cmd = base + [
                 "-i",
@@ -252,13 +256,15 @@ def combine_videos(
         # For stack operations, decide whether to use GPU or CPU processing
         # On VideoToolbox, CPU-only can be faster due to avoiding transfer overhead
         use_cpu_only = cpu or force_cpu_for_stack
-        
+
         if use_cpu_only or not backend:
             # Pure CPU path for filtering - avoid GPU entirely to skip transfer overhead
             # But we can still use hardware encoder for final encoding step
-            print(f"Using CPU-only path for stacking to avoid GPU-CPU transfer overhead")
+            print(
+                "Using CPU-only path for stacking to avoid GPU-CPU transfer overhead"
+            )
             print(f"Final encoder: {encoder}")
-            
+
             # CPU scaling
             if position in ("top", "bottom"):
                 pre.append(
@@ -269,37 +275,45 @@ def combine_videos(
                     f"{plot_lbl}scale=iw*sar:ih,setsar=1,scale=-2:{video_height}[plot_sw]"
                 )
             plot_lbl = "[plot_sw]"
-            
+
             # Keep the original encoder selection (could be hardware encoder)
             # encoder and encoder_args were already set above
         else:
             # Original GPU->CPU hybrid path for other backends where transfer cost is lower
             print(f"Using GPU scaling + CPU stacking path with {backend.name}")
-            
+
             # For VideoToolbox, upload to GPU first
             if backend.needs_upload:
-                pre.append(f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_uploaded]")
+                pre.append(
+                    f"{plot_lbl}hwupload=derive_device=videotoolbox[plot_uploaded]"
+                )
                 plot_lbl = "[plot_uploaded]"
-            
+
             # VideoToolbox scale_vt doesn't handle -2 (auto-calc) well, use software scaling
             if backend.needs_upload:
                 # Download first, then use CPU scaling which handles -2 properly
-                pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_downloaded]")
+                pre.append(
+                    f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_downloaded]"
+                )
                 if position in ("top", "bottom"):
                     # Match widths to a fixed target (avoid runtime dependent sizing)
                     pre.append(f"[plot_downloaded]scale=-1:{video_height}[plot_sw]")
                 else:
-                    # Match heights  
+                    # Match heights
                     pre.append(f"[plot_downloaded]scale=-2:{video_height}[plot_sw]")
                 plot_lbl = "[plot_sw]"
             else:
                 # CUDA/QSV/VAAPI can handle -2 in hardware scaling
                 if position in ("top", "bottom"):
                     # Match widths to a fixed target (avoid runtime dependent sizing)
-                    pre.append(f"{plot_lbl}{backend.scale_filter}=-1:{video_height}[plot_hw]")
+                    pre.append(
+                        f"{plot_lbl}{backend.scale_filter}=-1:{video_height}[plot_hw]"
+                    )
                 else:
                     # Match heights
-                    pre.append(f"{plot_lbl}{backend.scale_filter}=-2:{video_height}[plot_hw]")
+                    pre.append(
+                        f"{plot_lbl}{backend.scale_filter}=-2:{video_height}[plot_hw]"
+                    )
                 plot_lbl = "[plot_hw]"
                 pre.append(f"{plot_lbl}hwdownload,format={backend.sw_format}[plot_sw]")
                 plot_lbl = "[plot_sw]"
@@ -323,7 +337,7 @@ def combine_videos(
             # Remove GPU acceleration flags but keep device init for encoder
             cmd_base = [
                 "ffmpeg",
-                "-y", 
+                "-y",
                 "-hide_banner",
                 "-loglevel",
                 COMBINE_FFMPEG_LOGLEVEL,

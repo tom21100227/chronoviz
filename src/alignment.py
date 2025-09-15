@@ -2,7 +2,10 @@
 Module for aligning time series signals to video frame timelines.
 """
 
-import av, pathlib, numpy as np, pandas as pd
+import av
+import pathlib
+import numpy as np
+import pandas as pd
 from pathlib import Path
 
 

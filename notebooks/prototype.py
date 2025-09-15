@@ -27,7 +27,12 @@ from __future__ import annotations
 # Given a video and a times series, we check if they're similar in length. If we can achieve frame to frame consistenty, do that, if the time series is 0.5x, 1/3x, 1/4x, we should be able to handle that as well. If the time series is not a on a fraction/integer scale, we should have options of stretch or leave the last few frames as blank.
 
 # %%
-import av, fastplotlib, numpy as np, pandas as pd, os, sys, shutil
+import av
+import numpy as np
+import pandas as pd
+import os
+import sys
+import shutil
 import pathlib
 from pathlib import Path
 from rendercanvas.offscreen import OffscreenRenderCanvas
@@ -176,7 +181,6 @@ aligned = align_signal_cfr(
 # %%
 from typing import Optional, Sequence, Tuple
 from pathlib import Path
-import numpy as np
 import subprocess
 import fastplotlib as fpl
 
@@ -672,8 +676,7 @@ def render_grid(
 
 
 # %%
-from typing import Optional
-import numpy as np, subprocess, os, fastplotlib as fpl
+import os
 
 
 def generate_plot_videos(

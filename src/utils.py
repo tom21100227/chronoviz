@@ -1,4 +1,6 @@
-import platform, subprocess, shutil
+import platform
+import subprocess
+import shutil
 import numpy as np
 from numba import njit
 from typing import Optional, Tuple, List
@@ -25,7 +27,9 @@ def get_video_height(video_path: str) -> int:
         )
         return int(out.strip())
     except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
-        warnings.warn(f"Could not get video height for {video_path}: {e}", RuntimeWarning)
+        warnings.warn(
+            f"Could not get video height for {video_path}: {e}", RuntimeWarning
+        )
         return 0
 
 
@@ -78,6 +82,7 @@ def _ffmpeg_has_encoder(name: str) -> bool:
         return False
     return any((" " + name) in line for line in out.splitlines())
 
+
 def _ffmpeg_supports_filter(name: str) -> bool:
     """Return True if `ffmpeg -filters` lists the given filter name."""
     ff = shutil.which("ffmpeg")
@@ -90,13 +95,16 @@ def _ffmpeg_supports_filter(name: str) -> bool:
             capture_output=True,
             text=True,
         ).stdout
-        return any(line.split()[1] == name for line in out.splitlines()[8:] if line.strip())
+        return any(
+            line.split()[1] == name for line in out.splitlines()[8:] if line.strip()
+        )
     except Exception:
         warnings(
             f"Could not determine if ffmpeg supports filter '{name}'; assuming not.",
-            RuntimeWarning
+            RuntimeWarning,
         )
         return False
+
 
 def pick_video_encoder(alpha: bool, cpu: bool = False) -> Tuple[str, List[str]]:
     """
@@ -184,7 +192,9 @@ def clamp_nan_2d(sig, lo, hi):
                 elif v <= lo:
                     sig[i, c] = lo + 0.01
 
+
 from dataclasses import dataclass
+
 
 @dataclass
 class GpuBackend:
@@ -197,6 +207,7 @@ class GpuBackend:
     sw_format: str  # for hwdownload format before CPU filters
     needs_upload: bool = False  # VideoToolbox needs CPU->GPU upload
 
+
 BACKENDS = [
     GpuBackend(
         name="cuda",
@@ -204,25 +215,76 @@ BACKENDS = [
         scale_filter="scale_npp",
         overlay_filter="overlay_cuda",
         encoder="h264_nvenc",
-        enc_args=["-preset", "p2", "-b:v", "6M", "-maxrate", "6M", "-bufsize", "12M", "-g", "240", "-bf", "2", "-pix_fmt", "yuv420p"],
+        enc_args=[
+            "-preset",
+            "p2",
+            "-b:v",
+            "6M",
+            "-maxrate",
+            "6M",
+            "-bufsize",
+            "12M",
+            "-g",
+            "240",
+            "-bf",
+            "2",
+            "-pix_fmt",
+            "yuv420p",
+        ],
         sw_format="nv12",
     ),
     GpuBackend(
         name="qsv",
-        hw_flags=["-init_hw_device", "qsv=hw", "-filter_hw_device", "hw", "-hwaccel", "qsv"],
+        hw_flags=[
+            "-init_hw_device",
+            "qsv=hw",
+            "-filter_hw_device",
+            "hw",
+            "-hwaccel",
+            "qsv",
+        ],
         scale_filter="scale_qsv",
         overlay_filter="overlay_qsv",
         encoder="h264_qsv",
-        enc_args=["-global_quality", "23", "-g", "240", "-bf", "2", "-pix_fmt", "yuv420p"],
+        enc_args=[
+            "-global_quality",
+            "23",
+            "-g",
+            "240",
+            "-bf",
+            "2",
+            "-pix_fmt",
+            "yuv420p",
+        ],
         sw_format="nv12",
     ),
     GpuBackend(
         name="vaapi",
-        hw_flags=["-vaapi_device", "/dev/dri/renderD128", "-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi"],
+        hw_flags=[
+            "-vaapi_device",
+            "/dev/dri/renderD128",
+            "-hwaccel",
+            "vaapi",
+            "-hwaccel_output_format",
+            "vaapi",
+        ],
         scale_filter="scale_vaapi",
         overlay_filter="overlay_vaapi",
         encoder="h264_vaapi",
-        enc_args=["-b:v", "6M", "-maxrate", "6M", "-bufsize", "12M", "-g", "240", "-bf", "2", "-pix_fmt", "nv12"],
+        enc_args=[
+            "-b:v",
+            "6M",
+            "-maxrate",
+            "6M",
+            "-bufsize",
+            "12M",
+            "-g",
+            "240",
+            "-bf",
+            "2",
+            "-pix_fmt",
+            "nv12",
+        ],
         sw_format="nv12",
     ),
     GpuBackend(
@@ -231,7 +293,28 @@ BACKENDS = [
         scale_filter="scale_vt",
         overlay_filter="overlay_videotoolbox",
         encoder="h264_videotoolbox",
-        enc_args=["-b:v", "6M", "-maxrate", "6M", "-bufsize", "12M", "-g", "240", "-bf", "0", "-profile:v", "high", "-level", "4.2", "-realtime", "true", "-allow_sw", "0", "-pix_fmt", "yuv420p"],
+        enc_args=[
+            "-b:v",
+            "6M",
+            "-maxrate",
+            "6M",
+            "-bufsize",
+            "12M",
+            "-g",
+            "240",
+            "-bf",
+            "0",
+            "-profile:v",
+            "high",
+            "-level",
+            "4.2",
+            "-realtime",
+            "true",
+            "-allow_sw",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+        ],
         sw_format="yuv420p",  # VideoToolbox uses yuv420p, not nv12
         needs_upload=True,  # VideoToolbox needs CPU->GPU upload
     ),
