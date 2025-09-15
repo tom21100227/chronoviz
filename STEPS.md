@@ -1,172 +1,104 @@
 # ChronoViz Development Steps
 
-This roadmap breaks work into small, testable milestones. Each step lists:
-- What will change
-- Clear deliverables (what you should be able to run/see)
-- Agent handoff: stop here and let the human test before proceeding
+This document tracks the current milestone plan. Each step lists changes, clear deliverables, example commands, and an agent handoff to let a human validate before proceeding.
 
 Assumptions/prereqs:
-- Python 3.12+, `uv` installed, and FFmpeg available on PATH (`ffmpeg`, `ffprobe`).
-- You will provide your own video (`.mp4`) and signals CSV/HDF5 for testing.
+- Python 3.12+, `uv` installed, and FFmpeg/FFprobe on PATH (`ffmpeg`, `ffprobe`).
+- You provide your own video (`.mp4`) and signals CSV/HDF5 for testing.
 
 
-## Step 0 — Environment Sanity Check
-
-Changes:
-- None (validation only).
-
-Deliverables:
-- `uv sync` completes.
-- `ffmpeg -version` and `ffprobe -version` succeed.
-- `pytest -q` runs (may skip heavy tests in CI or without media).
-
-Commands:
-- `uv sync`
-- `ffmpeg -version`
-- `ffprobe -version`
-- `pytest -q`
-
-Agent handoff:
-- Stop after this step. Confirm tools are installed and tests run before continuing.
+## Summary of Completed Milestones
+- CLI foundation: `plots`, `combine`, and one‑shot `render` commands.
+- Packaged console entrypoint `chronoviz`.
+- Docs updated (README/AGENTS) to reflect CLI usage and uv workflow.
+- Polish: auto grid layout, auto legend for small `combine`, default labels, ffmpeg/ffprobe preflight, default render output name, quiet/verbose.
 
 
-## Step 1 — Minimal CLI for Plot Videos (plots-only)
+## Next Development Steps
+
+### Step A — Bar Plot Support
 
 Changes:
-- Add an argparse-based CLI that reads a signals file, aligns (if needed), and writes plot video(s) without combining with the base video yet.
-- New command: `chronoviz plots` (or `python -m chronoviz` if entrypoint isn’t wired yet).
-- Required args: `--signals`, `--output`, `--mode [grid|combine|separate]`. Optional: `--grid r c`, `--ylim lo hi`, `--plot-size w h`, `--fps`, `--left`, `--right`, `--ratio`.
+- Add bar plot rendering alongside line plots.
+- New CLI flags:
+  - `--style line|bar` (default: `line`)
+  - `--bar-mode grouped|stacked` (default: `grouped`)
+  - `--bar-agg instant|mean|max` (default: `instant`) with `--bar-window N` (frames) for smoothing when using `mean`/`max`.
+- Supported in `grid` and `combine` modes.
 
 Deliverables:
-- Running the CLI generates plot video(s) in the specified output directory.
-- Example (adjust paths):
-  - `chronoviz plots --signals /path/to/data.csv --output /tmp/plots --mode grid --grid 6 1 --ylim 0 100 --plot-size 320 768 --fps 30 --left 250 --right 250`
-  - Outputs: a `.mp4` (or `.webm` if alpha later) plot video in `/tmp/plots`.
+- `chronoviz plots ... --style bar` generates bar plot video(s) for grid/combine.
+- `chronoviz render ... --style bar` produces final side‑by‑side/overlay output.
+
+Example commands:
+- `chronoviz plots -s data.csv -o /tmp/plots -m grid --style bar --bar-mode grouped`
+- `chronoviz plots -s data.csv -o /tmp/plots -m combine --style bar --bar-mode stacked --bar-agg mean --bar-window 15`
 
 Agent handoff:
-- Stop here. Human validates plot video quality/performance and notes any UX tweaks before combining with a base video.
+- Stop after implementation. Human tests grouped/stacked and agg modes (instant/mean/max) for visual quality and performance.
 
 
-## Step 2 — CLI Entrypoint Packaging
+### Step B — X‑Axis as Wall Time
 
 Changes:
-- Add `[project.scripts]` to `pyproject.toml` so `chronoviz` is a console command (e.g., `chronoviz = "main:cli_main"` or `chronoviz = "src.cli:main"`).
-- Ensure module layout supports `python -m chronoviz` as well (optional but nice).
+- X‑axis can reflect frames, seconds, or absolute wall time.
+- New CLI: `--xaxis frames|seconds|absolute`.
+  - `render` defaults to `seconds`; `plots` defaults to `frames` unless `--fps` provided.
+- Absolute mode: add an overlay timestamp (HH:MM:SS.mmm) rather than dynamic tick relabeling.
 
 Deliverables:
-- `chronoviz --help` works after `uv sync` or `pip install -e .`.
-- Existing `plots` subcommand is discoverable under `chronoviz`.
+- `chronoviz render` shows seconds on x‑axis by default; `--xaxis absolute` adds a timestamp overlay when video timeline is available.
+- `plots` supports `--xaxis seconds` when `--fps` is provided.
 
-Commands:
-- `uv sync`
-- `chronoviz --help`
-- `chronoviz plots --help`
+Example commands:
+- `chronoviz render -v video.mp4 -s data.csv -o /tmp/out.mp4 --xaxis seconds`
+- `chronoviz plots -s data.csv -o /tmp/plots --xaxis seconds --fps 30`
+- `chronoviz render -v video.mp4 -s data.csv -o /tmp/out.mp4 --xaxis absolute`
 
 Agent handoff:
-- Stop here. Human validates the packaging/entrypoint works in their environment.
+- Stop after implementation. Human confirms x‑axis scaling and timestamp overlay are correct.
 
 
-## Step 3 — Add Video Combine Command (stack/overlay)
+### Step C — Richer Data Adapters
 
 Changes:
-- Add `chronoviz combine` command that merges a base video with a plot video using `src/combine.py`.
-- Args: `--video`, `--plot-video`, `--output`, `--position [top|bottom|left|right|tr|tl|br|bl]`, `--overlay`, `--alpha`, `--ratio`, `--cpu`.
-- Ensure GPU-aware path remains optional; provide `--cpu` for deterministic fallback.
+- Introduce `src/adapters` to handle multiple input shapes:
+  - ROI CSV (`frame, roi_name, percentage_in_roi`)
+  - Wide numeric CSV/HDF5, optional time column (`--time-col`),
+  - HDF5 datasets with separate time/data (`--time-key`).
+- Extend `read_timeseries` to return `(values, times|None, columns, meta)` and prefer times for alignment when available.
+- Extend `align_signal_cfr` to accept time arrays for more precise resampling to video times.
+- Optional `--units` to annotate axis labels.
 
 Deliverables:
-- Side-by-side or overlay output video created successfully.
-- Example (stack right):
-  - `chronoviz combine --video /path/to/source.mp4 --plot-video /tmp/plots/signals_plot_grid.mp4 --output /tmp/combined.mp4 --position right --cpu`
-- Example (overlay top-right with 80% opacity):
-  - `chronoviz combine --video /path/to/source.mp4 --plot-video /tmp/plots/signals_plot_grid.mp4 --output /tmp/overlay.mp4 --overlay --position tr --alpha 0.8 --cpu`
+- CLI seamlessly loads different input formats; seconds/absolute x‑axis uses provided times when present.
+
+Example commands:
+- `chronoviz render -v video.mp4 -s data_with_time.csv --time-col timestamp -o /tmp/out.mp4 --xaxis seconds`
+- `chronoviz render -v video.mp4 -s data.h5 --signals-key data --time-key time -o /tmp/out.mp4 --xaxis absolute`
 
 Agent handoff:
-- Stop here. Human checks visual alignment, sizing, and encoder compatibility.
+- Stop after implementation. Human tests multiple file shapes and confirms alignment behavior.
 
 
-## Step 4 — One-Shot Pipeline Command (render)
+### Step D — GPU Plotting Backend (Optional)
 
 Changes:
-- Add `chronoviz render` that performs: read/align → plots → combine, in one command.
-- Args unify from Steps 1 and 3: `--video`, `--signals`, plotting args, combine args, and `--plots-only` flag to skip combine.
+- Add optional `pygfx`/`fastplotlib` backend for offscreen GPU plotting.
+- New CLI: `--backend matplotlib|pygfx` (default: `matplotlib`).
+- Feature parity goal: line + bar, grid/combine, decent color defaults.
 
 Deliverables:
-- Single command produces final combined video, or only plot videos when `--plots-only` is set.
-- Example:
-  - `chronoviz render --video /path/to/source.mp4 --signals /path/to/data.csv --mode grid --grid 6 1 --ylim 0 100 --plot-size 320 768 --position right --ratio 1.0 --cpu --output /tmp/final.mp4`
+- `chronoviz plots/render --backend pygfx` runs and shows performance gains where supported.
+
+Example commands:
+- `chronoviz plots -s data.csv -o /tmp/plots -m grid --backend pygfx`
+- `chronoviz render -v video.mp4 -s data.csv -o /tmp/out.mp4 -m combine --style bar --backend pygfx`
 
 Agent handoff:
-- Stop here. Human validates end-to-end flow and flags default choices to refine (e.g., defaults for grid, labels, legend).
-
-
-## Step 5 — Documentation Cleanup
-
-Changes:
-- Update README.md and AGENTS.md:
-  - Replace `requirements.txt` instructions with `uv sync` (project already uses `pyproject.toml`).
-  - Add CLI usage examples from Steps 1–4.
-  - Note that sample media is not bundled; user must supply `--video`/`--signals`.
-
-Deliverables:
-- Accurate setup/usage docs that match the implemented CLI.
-
-Agent handoff:
-- Stop here. Human reviews docs for clarity and completeness.
-
-
-## Step 6 — Validation and Linting
-
-Changes:
-- Run and fix lint/format/type hints only where touched by CLI work.
-- Add a couple of smoke tests for CLI argument parsing and plot generation using tiny synthetic data (no media files required for these tests).
-
-Deliverables:
-- `ruff check .` passes (or violations triaged).
-- `black .` formats cleanly.
-- `pytest -q` passes for new tests.
-
-Commands:
-- `ruff check .`
-- `black .`
-- `pytest -q`
-
-Agent handoff:
-- Stop here. Human validates CI hygiene and minimal test coverage.
-
-
-## Step 7 — UX and Defaults Polish
-
-Changes:
-- Improve defaults: auto grid layout for N channels, reasonable `ylim` detection, human-friendly labels, optional legend in combine mode.
-- Add `--xlabel`, `--ylabel`, and simple theming flags where low-effort.
-
-Deliverables:
-- Cleaner visuals with sensible defaults; fewer required flags for common cases.
-- Example:
-  - `chronoviz render --video v.mp4 --signals s.csv --mode grid --plots-only` should “just work” with decent layout.
-
-Agent handoff:
-- Stop here. Human confirms visual quality is acceptable for typical datasets.
-
-
-## Step 8 — GPU Path Tuning (Optional)
-
-Changes:
-- Verify GPU backends selection heuristics on the target machine.
-- Expose `--force-cpu-for-stack` toggle (already supported in code) and document when to use it.
-
-Deliverables:
-- Confirmed performance path (CPU-only vs GPU hybrid) with instructions for the user to switch.
-- Example:
-  - `chronoviz combine --video v.mp4 --plot-video p.mp4 --output out.mp4 --position right --cpu`
-  - `chronoviz combine --video v.mp4 --plot-video p.mp4 --output out.mp4 --position right --alpha 1.0` (GPU where available)
-
-Agent handoff:
-- Stop here. Human decides whether to pursue deeper GPU integration or keep CPU defaults.
+- Stop after implementation. Human benchmarks and decides whether to use GPU backend by default.
 
 
 Notes
-- Keep each step scoped and reversible; don’t refactor unrelated parts.
-- Prefer adding CLI first, then tightening docs/tests, then polish.
-- If the human reports blockers at any step, address them before proceeding.
-
+- Keep each step scoped and reversible; avoid refactors beyond scope.
+- Favor minimal, testable increments; deliver and pause for human validation after each step.

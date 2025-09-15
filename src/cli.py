@@ -103,9 +103,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480)
     )
     plots.add_argument("--fps", type=float, default=30.0)
-    plots.add_argument("--left", type=int, default=250)
-    plots.add_argument("--right", type=int, default=250)
+    plots.add_argument(
+        "--left",
+        type=float,
+        default=250,
+        help="Window left (seconds if --xaxis=seconds/absolute, else frames)",
+    )
+    plots.add_argument(
+        "--right",
+        type=float,
+        default=250,
+        help="Window right (seconds if --xaxis=seconds/absolute, else frames)",
+    )
     plots.add_argument("--ratio", type=float, default=1.0)
+    plots.add_argument(
+        "--xaxis", choices=("frames", "seconds", "absolute"), default="frames"
+    )
+    # plot style
+    plots.add_argument("--style", choices=("line", "bar"), default="line")
+    plots.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
+    plots.add_argument(
+        "--bar-agg", choices=("instant", "mean", "max"), default="instant"
+    )
+    plots.add_argument(
+        "--bar-window",
+        type=int,
+        default=15,
+        help="Window size (frames) for bar aggregation when using mean/max",
+    )
     plots.add_argument("--xlabel", type=str, default=None)
     plots.add_argument("--ylabel", type=str, default=None)
     legend_group = plots.add_mutually_exclusive_group()
@@ -191,8 +216,27 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         "--plot-size", nargs=2, metavar=("W", "H"), type=int, default=(640, 480)
     )
-    render.add_argument("--left", type=int, default=250)
-    render.add_argument("--right", type=int, default=250)
+    render.add_argument(
+        "--left",
+        type=float,
+        default=250,
+        help="Window left (seconds if --xaxis=seconds/absolute, else frames)",
+    )
+    render.add_argument(
+        "--right",
+        type=float,
+        default=250,
+        help="Window right (seconds if --xaxis=seconds/absolute, else frames)",
+    )
+    render.add_argument(
+        "--xaxis", choices=("frames", "seconds", "absolute"), default="seconds"
+    )
+    render.add_argument("--style", choices=("line", "bar"), default="line")
+    render.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
+    render.add_argument(
+        "--bar-agg", choices=("instant", "mean", "max"), default="instant"
+    )
+    render.add_argument("--bar-window", type=int, default=15)
     render.add_argument("--xlabel", type=str, default=None)
     render.add_argument("--ylabel", type=str, default=None)
     legend_group_r = render.add_mutually_exclusive_group()
@@ -240,24 +284,43 @@ def cmd_plots(args: argparse.Namespace) -> int:
     C = sig.shape[1]
 
     # Defaults for labels
-    xlabel = args.xlabel if args.xlabel is not None else "Time (frames)"
+    if args.xlabel is not None:
+        xlabel = args.xlabel
+    else:
+        xlabel = (
+            "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
+        )
     default_ylabel = "Percentage in ROI" if is_roi else "Value"
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)
+
+    # Convert left/right when xaxis is seconds/absolute
+    plot_fps = float(args.fps) * float(args.ratio)
+    if args.xaxis in ("seconds", "absolute"):
+        left_samples = int(round(float(args.left) * plot_fps))
+        right_samples = int(round(float(args.right) * plot_fps))
+    else:
+        left_samples = int(round(float(args.left)))
+        right_samples = int(round(float(args.right)))
 
     out = generate_plot_videos(
         aligned_signal=sig,
         ratio=float(args.ratio),
         output_dir=args.output,
         mode=args.mode,
+        xaxis=args.xaxis,
+        style=args.style,
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
         ylim=tuple(args.ylim) if args.ylim is not None else None,
-        left=int(args.left),
-        right=int(args.right),
+        left=left_samples,
+        right=right_samples,
         video_fps=float(args.fps),
         plot_size=tuple(args.plot_size),
         show_legend=show_legend,
+        bar_mode=args.bar_mode,
+        bar_agg=args.bar_agg,
+        bar_window=int(args.bar_window),
         xlabel=xlabel,
         ylabel=ylabel,
     )
@@ -336,24 +399,43 @@ def cmd_render(args: argparse.Namespace) -> int:
 
     # Defaults for labels & legend
     C = aligned.shape[1] if aligned.ndim == 2 else 1
-    xlabel = args.xlabel if args.xlabel is not None else "Time (frames)"
+    if args.xlabel is not None:
+        xlabel = args.xlabel
+    else:
+        xlabel = (
+            "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
+        )
     default_ylabel = "Percentage in ROI" if is_roi else "Value"
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)
+
+    # Convert left/right for render
+    plot_fps = float(base_fps) * float(args.ratio)
+    if args.xaxis in ("seconds", "absolute"):
+        left_samples = int(round(float(args.left) * plot_fps))
+        right_samples = int(round(float(args.right) * plot_fps))
+    else:
+        left_samples = int(round(float(args.left)))
+        right_samples = int(round(float(args.right)))
 
     plot_path = generate_plot_videos(
         aligned_signal=aligned,
         ratio=float(args.ratio),
         output_dir=plots_dir,
         mode=args.mode,
+        xaxis=args.xaxis,
+        style=args.style,
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
         ylim=tuple(args.ylim) if args.ylim is not None else None,
-        left=int(args.left),
-        right=int(args.right),
+        left=left_samples,
+        right=right_samples,
         video_fps=base_fps,
         plot_size=tuple(args.plot_size),
         show_legend=show_legend,
+        bar_mode=args.bar_mode,
+        bar_agg=args.bar_agg,
+        bar_window=int(args.bar_window),
         xlabel=xlabel,
         ylabel=ylabel,
     )
