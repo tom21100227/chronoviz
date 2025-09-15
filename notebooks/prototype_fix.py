@@ -27,7 +27,12 @@ from __future__ import annotations
 # Given a video and a time series, we check if they're similar in length. If we can achieve frame-to-frame consistency, do that. If the time series is 0.5x, 1/3x, 1/4x, we should be able to handle that as well. If the time series is not on a fraction/integer scale, we should have options of stretch or leave the last few frames as blank.
 
 # %%
-import os, sys, shutil, pathlib, warnings, subprocess
+import os
+import sys
+import shutil
+import pathlib
+import warnings
+import subprocess
 from pathlib import Path
 import numpy as np
 import pandas as pd

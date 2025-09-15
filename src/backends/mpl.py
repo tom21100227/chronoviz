@@ -1,16 +1,14 @@
-import subprocess, os
 from pathlib import Path
-from ..utils import _has_cmd, _compute_ylim, clamp_nan_2d
-from ..writers import FFmpegWriter, FrameWriter, create_ffmpeg_writer
+from ..utils import _compute_ylim, clamp_nan_2d
+from ..writers import FrameWriter, create_ffmpeg_writer
 import numpy as np
 import matplotlib as mpl
 
 mpl.use("Agg")  # offscreen; keeps GUI out of the loop
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 from matplotlib.font_manager import FontProperties
 from numba import njit
-from typing import Tuple, List, Optional
+from typing import Tuple, List
 
 USE_RGB24 = False
 
@@ -29,16 +27,18 @@ mpl.rcParams.update(
 )
 
 
-def _prepare_line_styles(line_kwargs: dict | List[dict] | None, num_channels: int) -> List[dict]:
+def _prepare_line_styles(
+    line_kwargs: dict | List[dict] | None, num_channels: int
+) -> List[dict]:
     """Prepare line kwargs for multiple channels, same as plt.plot() accepts."""
     default_kwargs = {
         "lw": 1.2,
         "antialiased": True,
         "solid_joinstyle": "bevel",
-        "solid_capstyle": "butt", 
+        "solid_capstyle": "butt",
         "animated": True,
     }
-    
+
     if line_kwargs is None:
         # No custom styling - use defaults with automatic colors for multi-channel
         if num_channels == 1:
@@ -52,7 +52,7 @@ def _prepare_line_styles(line_kwargs: dict | List[dict] | None, num_channels: in
                 kwargs["color"] = colors[i % len(colors)]
                 styles.append(kwargs)
             return styles
-    
+
     if isinstance(line_kwargs, dict):
         # Single kwargs dict - apply to all channels
         if num_channels == 1:
@@ -71,7 +71,7 @@ def _prepare_line_styles(line_kwargs: dict | List[dict] | None, num_channels: in
                     kwargs["color"] = colors[i % len(colors)]
                 styles.append(kwargs)
             return styles
-    
+
     if isinstance(line_kwargs, list):
         # List of kwargs - pad with defaults if needed
         colors = plt.get_cmap("tab10").colors
@@ -81,11 +81,13 @@ def _prepare_line_styles(line_kwargs: dict | List[dict] | None, num_channels: in
             if i < len(line_kwargs):
                 kwargs.update(line_kwargs[i])
             # Only auto-assign color if user didn't specify one for this channel
-            if i >= len(line_kwargs) or ("color" not in line_kwargs[i] and "c" not in line_kwargs[i]):
+            if i >= len(line_kwargs) or (
+                "color" not in line_kwargs[i] and "c" not in line_kwargs[i]
+            ):
                 kwargs["color"] = colors[i % len(colors)]
             styles.append(kwargs)
         return styles
-    
+
     return [default_kwargs.copy() for _ in range(num_channels)]
 
 
@@ -95,26 +97,26 @@ def _apply_axis_customizations(ax, xlabel=None, ylabel=None, axis_kwargs=None):
         ax.set_xlabel(xlabel, fontsize=9)
     if ylabel:
         ax.set_ylabel(ylabel, fontsize=9)
-    
+
     if axis_kwargs:
         # Handle common axis customizations
-        if 'grid' in axis_kwargs:
-            if axis_kwargs['grid']:
+        if "grid" in axis_kwargs:
+            if axis_kwargs["grid"]:
                 ax.grid(True, alpha=0.15, linewidth=0.6)
             else:
                 ax.grid(False)
-        
-        if 'spines' in axis_kwargs:
-            spine_settings = axis_kwargs['spines']
+
+        if "spines" in axis_kwargs:
+            spine_settings = axis_kwargs["spines"]
             for spine_name, visible in spine_settings.items():
                 if spine_name in ax.spines:
                     ax.spines[spine_name].set_visible(visible)
-        
-        if 'tick_params' in axis_kwargs:
-            ax.tick_params(**axis_kwargs['tick_params'])
-        
-        if 'facecolor' in axis_kwargs:
-            ax.set_facecolor(axis_kwargs['facecolor'])
+
+        if "tick_params" in axis_kwargs:
+            ax.tick_params(**axis_kwargs["tick_params"])
+
+        if "facecolor" in axis_kwargs:
+            ax.set_facecolor(axis_kwargs["facecolor"])
 
 
 def _lightweight_axes(ax):
@@ -163,11 +165,11 @@ def render_one_channel(
 ) -> Path:
     """
     Stream a sliding-window line plot to FFmpeg. Returns final output Path.
-    
+
     Parameters:
         line_kwargs: Keyword arguments passed to plt.plot() (e.g., linewidth=2.0, color='red', linestyle='--')
         xlabel: Label for x-axis
-        ylabel: Label for y-axis  
+        ylabel: Label for y-axis
         axis_kwargs: Additional axis formatting (e.g., {'grid': False, 'spines': {'top': False}})
     """
     sig = np.asarray(signal, dtype=np.float32).ravel()
@@ -198,7 +200,7 @@ def render_one_channel(
     # Prepare line styling - merge user kwargs with defaults
     default_kwargs = {
         "lw": 1.2,
-        "solid_joinstyle": "bevel", 
+        "solid_joinstyle": "bevel",
         "solid_capstyle": "butt",
         "animated": True,
     }
@@ -290,12 +292,12 @@ def render_all_channels(
 ) -> Path:
     """
     Combined-mode: all channels in one Axes (one line per channel), streamed to FFmpeg.
-    
+
     Parameters:
-        line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels), 
+        line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels),
                     or a list of dicts (one per channel)
         xlabel: Label for x-axis
-        ylabel: Label for y-axis  
+        ylabel: Label for y-axis
         axis_kwargs: Additional axis formatting (e.g., {'grid': False, 'spines': {'top': False}})
     """
     sig = np.asarray(signals, dtype=np.float32)
@@ -435,9 +437,9 @@ def render_grid(
 ) -> Path:
     """
     Grid-mode: each channel in its own subplot, streamed to FFmpeg.
-    
+
     Parameters:
-        line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels), 
+        line_kwargs: Either a single dict of plt.plot() kwargs (applied to all channels),
                     or a list of dicts (one per channel)
         xlabel: Label for x-axis (applied to all subplots)
         ylabel: Label for y-axis (applied to all subplots)
@@ -511,7 +513,7 @@ def render_grid(
 
         # Title for each subplot
         ax.set_title(col_names[c], fontsize=8, pad=2)
-        
+
         # Apply axis customizations to each subplot
         _apply_axis_customizations(ax, xlabel, ylabel, axis_kwargs)
 
