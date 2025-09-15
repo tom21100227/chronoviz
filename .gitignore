@@ -16,3 +16,7 @@ test_data/_internal
 .vscode
 
 .env
+
+# Generated outputs
+/tmp/
+
