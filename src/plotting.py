@@ -35,7 +35,7 @@ def generate_plot_videos(
     backend: str = "matplotlib",
     # bar-specific options
     bar_mode: str | None = None,  # "grouped" or "stacked"
-    bar_agg: str | None = None,   # "instant", "mean", "max"
+    bar_agg: str | None = None,  # "instant", "mean", "max"
     bar_window: int | None = None,
     **kwargs,
 ) -> Path:

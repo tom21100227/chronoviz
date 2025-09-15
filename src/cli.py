@@ -116,13 +116,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Window right (seconds if --xaxis=seconds/absolute, else frames)",
     )
     plots.add_argument("--ratio", type=float, default=1.0)
-    plots.add_argument("--xaxis", choices=("frames", "seconds", "absolute"), default="frames")
+    plots.add_argument(
+        "--xaxis", choices=("frames", "seconds", "absolute"), default="frames"
+    )
     # plot style
     plots.add_argument("--style", choices=("line", "bar"), default="line")
     plots.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
-    plots.add_argument("--bar-agg", choices=("instant", "mean", "max"), default="instant")
-    plots.add_argument("--bar-window", type=int, default=15,
-                       help="Window size (frames) for bar aggregation when using mean/max")
+    plots.add_argument(
+        "--bar-agg", choices=("instant", "mean", "max"), default="instant"
+    )
+    plots.add_argument(
+        "--bar-window",
+        type=int,
+        default=15,
+        help="Window size (frames) for bar aggregation when using mean/max",
+    )
     plots.add_argument("--xlabel", type=str, default=None)
     plots.add_argument("--ylabel", type=str, default=None)
     legend_group = plots.add_mutually_exclusive_group()
@@ -220,10 +228,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=250,
         help="Window right (seconds if --xaxis=seconds/absolute, else frames)",
     )
-    render.add_argument("--xaxis", choices=("frames", "seconds", "absolute"), default="seconds")
+    render.add_argument(
+        "--xaxis", choices=("frames", "seconds", "absolute"), default="seconds"
+    )
     render.add_argument("--style", choices=("line", "bar"), default="line")
     render.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
-    render.add_argument("--bar-agg", choices=("instant", "mean", "max"), default="instant")
+    render.add_argument(
+        "--bar-agg", choices=("instant", "mean", "max"), default="instant"
+    )
     render.add_argument("--bar-window", type=int, default=15)
     render.add_argument("--xlabel", type=str, default=None)
     render.add_argument("--ylabel", type=str, default=None)
@@ -275,7 +287,9 @@ def cmd_plots(args: argparse.Namespace) -> int:
     if args.xlabel is not None:
         xlabel = args.xlabel
     else:
-        xlabel = "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
+        xlabel = (
+            "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
+        )
     default_ylabel = "Percentage in ROI" if is_roi else "Value"
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)
@@ -388,7 +402,9 @@ def cmd_render(args: argparse.Namespace) -> int:
     if args.xlabel is not None:
         xlabel = args.xlabel
     else:
-        xlabel = "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
+        xlabel = (
+            "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
+        )
     default_ylabel = "Percentage in ROI" if is_roi else "Value"
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)

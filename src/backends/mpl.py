@@ -658,6 +658,7 @@ def render_grid(
 
 # === Bar plot renderers ===
 
+
 def _bar_values_vec(sig: np.ndarray, i: int, agg: str, window: int) -> np.ndarray:
     N, C = sig.shape
     if agg == "instant" or window <= 1:
@@ -733,7 +734,14 @@ def render_all_channels_bar(
         width = 0.8
         bottom = 0.0
         for c in range(C):
-            r = plt.Rectangle((x0 - width / 2, bottom), width, 0.0, color=colors[c], animated=True, label=col_names[c])
+            r = plt.Rectangle(
+                (x0 - width / 2, bottom),
+                width,
+                0.0,
+                color=colors[c],
+                animated=True,
+                label=col_names[c],
+            )
             ax.add_patch(r)
             rects.append(r)
         ax.set_xlim(-1.0, 1.0)
@@ -742,7 +750,14 @@ def render_all_channels_bar(
         xs = np.arange(C, dtype=float)
         width = 0.8
         for c in range(C):
-            (r,) = ax.bar([xs[c]], [0.0], width=width, color=colors[c], label=col_names[c], animated=True)
+            (r,) = ax.bar(
+                [xs[c]],
+                [0.0],
+                width=width,
+                color=colors[c],
+                label=col_names[c],
+                animated=True,
+            )
             rects.append(r)
         ax.set_xlim(-0.5, C - 0.5)
         # lightweight tick labels
@@ -761,7 +776,9 @@ def render_all_channels_bar(
     background = fig.canvas.copy_from_bbox(ax.bbox)
 
     if writer is None:
-        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
+        writer = create_ffmpeg_writer(
+            Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24
+        )
     rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
 
     try:
@@ -788,7 +805,9 @@ def render_all_channels_bar(
             fig.canvas.blit(ax.bbox)
 
             if USE_RGB24:
-                argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
+                argb = np.frombuffer(
+                    fig.canvas.tostring_argb(), dtype=np.uint8
+                ).reshape(H, W, 4)
                 rgb[...] = argb[:, :, 1:4]
                 writer.write_frame(memoryview(rgb))
             else:
@@ -881,7 +900,9 @@ def render_grid_bar(
     background = fig.canvas.copy_from_bbox(fig.bbox)
 
     if writer is None:
-        writer = create_ffmpeg_writer(Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24)
+        writer = create_ffmpeg_writer(
+            Path(out_path), W, H, fps, alpha, use_rgb24=USE_RGB24
+        )
     rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
 
     try:
@@ -896,7 +917,9 @@ def render_grid_bar(
             fig.canvas.blit(fig.bbox)
 
             if USE_RGB24:
-                argb = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(H, W, 4)
+                argb = np.frombuffer(
+                    fig.canvas.tostring_argb(), dtype=np.uint8
+                ).reshape(H, W, 4)
                 rgb[...] = argb[:, :, 1:4]
                 writer.write_frame(memoryview(rgb))
             else:
