@@ -21,6 +21,7 @@ def generate_plot_videos(
     ratio: float,
     output_dir: str | Path,
     mode: str = "grid",  # "separate", "combine", "grid"
+    xaxis: str = "frames",  # 'frames' | 'seconds' | 'absolute' (line style only)
     style: str = "line",  # "line" or "bar"
     grid: Optional[tuple[int, int]] = None,
     col_names: Optional[list[str]] = None,
@@ -86,6 +87,7 @@ def generate_plot_videos(
     plot_fps = float(video_fps) * float(ratio)
     if plot_fps <= 0:
         raise ValueError("Computed plot_fps must be > 0 (check video_fps and ratio).")
+    sec_per_sample = 1.0 / plot_fps
 
     window_len = left + right + 1
     x = np.arange(-left, right + 1, dtype=float)
@@ -120,6 +122,8 @@ def generate_plot_videos(
                         ylim=global_ylim,
                         title=col_names[c],
                         alpha=False,
+                        xaxis_mode=xaxis,
+                        sec_per_sample=sec_per_sample,
                         **kwargs,
                     )
                 return output_dir
@@ -153,6 +157,8 @@ def generate_plot_videos(
                     col_names=col_names if show_legend else None,
                     ylim=global_ylim,
                     alpha=False,
+                    xaxis_mode=xaxis,
+                    sec_per_sample=sec_per_sample,
                     **kwargs,
                 )
             else:
@@ -183,6 +189,8 @@ def generate_plot_videos(
                     col_names=col_names,
                     ylim=global_ylim,
                     alpha=False,
+                    xaxis_mode=xaxis,
+                    sec_per_sample=sec_per_sample,
                     **kwargs,
                 )
             else:

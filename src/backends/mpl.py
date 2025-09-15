@@ -162,6 +162,8 @@ def render_one_channel(
     xlabel: str | None = None,
     ylabel: str | None = None,
     axis_kwargs: dict | None = None,
+    xaxis_mode: str = "frames",  # 'frames' | 'seconds' | 'absolute'
+    sec_per_sample: float = 1.0 / 30.0,
 ) -> Path:
     """
     Stream a sliding-window line plot to FFmpeg. Returns final output Path.
@@ -196,6 +198,8 @@ def render_one_channel(
 
     # Fixed x-grid: [-left, ..., 0, ..., right]
     x = np.arange(-left, right + 1, dtype=np.float32)
+    if xaxis_mode in ("seconds", "absolute"):
+        x = x * float(sec_per_sample)
 
     # Prepare line styling - merge user kwargs with defaults
     default_kwargs = {
@@ -212,11 +216,29 @@ def render_one_channel(
 
     # Axes limits: x is fixed; y either provided or computed globally
     ylo, yhi = _compute_ylim(sig, ylim)
-    ax.set_xlim(-left, right)
+    if xaxis_mode in ("seconds", "absolute"):
+        ax.set_xlim(-left * sec_per_sample, right * sec_per_sample)
+    else:
+        ax.set_xlim(-left, right)
     ax.set_ylim(ylo, yhi)
 
     # Optional vertical cursor at t=0 for reference (cheap extra artist)
     cursor = ax.axvline(0.0, lw=0.8, ls="--", color="0.4")
+
+    # Absolute time overlay (HH:MM:SS.mmm)
+    time_text = None
+    if xaxis_mode == "absolute":
+        time_text = ax.text(
+            0.01,
+            0.98,
+            "",
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            fontsize=8,
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none"),
+            animated=True,
+        )
 
     if title:
         ax.set_title(title, fontsize=10)
@@ -257,6 +279,12 @@ def render_one_channel(
 
             fig.canvas.restore_region(background)
             ax.draw_artist(line)
+            if time_text is not None:
+                t = i * sec_per_sample
+                mm, ss = divmod(t, 60.0)
+                hh, mm = divmod(mm, 60.0)
+                time_text.set_text(f"{int(hh):02d}:{int(mm):02d}:{ss:06.3f}")
+                ax.draw_artist(time_text)
             fig.canvas.blit(ax.bbox)  # cheap: only the axes region
             if USE_RGB24:
                 argb = np.frombuffer(
@@ -289,6 +317,8 @@ def render_all_channels(
     xlabel: str | None = None,
     ylabel: str | None = None,
     axis_kwargs: dict | None = None,
+    xaxis_mode: str = "frames",
+    sec_per_sample: float = 1.0 / 30.0,
 ) -> Path:
     """
     Combined-mode: all channels in one Axes (one line per channel), streamed to FFmpeg.
@@ -327,6 +357,8 @@ def render_all_channels(
 
     # Shared x for all channels
     x = np.arange(-left, right + 1, dtype=np.float32)
+    if xaxis_mode in ("seconds", "absolute"):
+        x = x * float(sec_per_sample)
 
     # Prepare styles for each channel
     styles = _prepare_line_styles(line_kwargs, C)
@@ -343,13 +375,31 @@ def render_all_channels(
         ln.set_clip_box(None)
     # Limits (global y)
     ylo, yhi = _compute_ylim(sig, ylim)
-    ax.set_xlim(-left, right)
+    if xaxis_mode in ("seconds", "absolute"):
+        ax.set_xlim(-left * sec_per_sample, right * sec_per_sample)
+    else:
+        ax.set_xlim(-left, right)
     ax.set_ylim(ylo, yhi)
     ax.set_autoscalex_on(False)
     ax.set_autoscaley_on(False)
 
     # Cursor at t=0
     ax.axvline(0.0, lw=0.8, ls="--", color="0.4")
+
+    # Absolute time overlay
+    time_text = None
+    if xaxis_mode == "absolute":
+        time_text = ax.text(
+            0.01,
+            0.98,
+            "",
+            transform=ax.transAxes,
+            va="top",
+            ha="left",
+            fontsize=8,
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none"),
+            animated=True,
+        )
 
     # Optional legend (draw once; becomes part of the cached background)
     if col_names:
@@ -399,6 +449,12 @@ def render_all_channels(
             fig.canvas.restore_region(background)
             for ln in lines:
                 ax.draw_artist(ln)
+            if time_text is not None:
+                t = i * sec_per_sample
+                mm, ss = divmod(t, 60.0)
+                hh, mm = divmod(mm, 60.0)
+                time_text.set_text(f"{int(hh):02d}:{int(mm):02d}:{ss:06.3f}")
+                ax.draw_artist(time_text)
             fig.canvas.blit(ax.bbox)
 
             # Write frame
@@ -434,6 +490,8 @@ def render_grid(
     xlabel: str | None = None,
     ylabel: str | None = None,
     axis_kwargs: dict | None = None,
+    xaxis_mode: str = "frames",
+    sec_per_sample: float = 1.0 / 30.0,
 ) -> Path:
     """
     Grid-mode: each channel in its own subplot, streamed to FFmpeg.
@@ -485,6 +543,8 @@ def render_grid(
 
     # Shared x for all channels
     x = np.arange(-left, right + 1, dtype=np.float32)
+    if xaxis_mode in ("seconds", "absolute"):
+        x = x * float(sec_per_sample)
 
     # Prepare styles for each channel
     styles = _prepare_line_styles(line_kwargs, C)
@@ -503,7 +563,10 @@ def render_grid(
 
         # Set limits for each subplot
         ylo, yhi = _compute_ylim(sig[:, c : c + 1], ylim)
-        ax.set_xlim(-left, right)
+        if xaxis_mode in ("seconds", "absolute"):
+            ax.set_xlim(-left * sec_per_sample, right * sec_per_sample)
+        else:
+            ax.set_xlim(-left, right)
         ax.set_ylim(ylo, yhi)
         ax.set_autoscalex_on(False)
         ax.set_autoscaley_on(False)
@@ -542,6 +605,21 @@ def render_grid(
     # Optional buffer for rgb24 path
     rgb = np.empty((H, W, 3), dtype=np.uint8) if USE_RGB24 else None
 
+    # Absolute time overlay: draw on first axes only
+    time_text = None
+    if xaxis_mode == "absolute" and len(axes) > 0:
+        time_text = axes[0].text(
+            0.01,
+            0.98,
+            "",
+            transform=axes[0].transAxes,
+            va="top",
+            ha="left",
+            fontsize=8,
+            bbox=dict(facecolor="white", alpha=0.6, edgecolor="none"),
+            animated=True,
+        )
+
     try:
         for i in range(N):
             # Update all channel windows and lines
@@ -553,6 +631,12 @@ def render_grid(
             fig.canvas.restore_region(background)
             for c in range(C):
                 axes[c].draw_artist(lines[c])
+            if time_text is not None:
+                t = i * sec_per_sample
+                mm, ss = divmod(t, 60.0)
+                hh, mm = divmod(mm, 60.0)
+                time_text.set_text(f"{int(hh):02d}:{int(mm):02d}:{ss:06.3f}")
+                axes[0].draw_artist(time_text)
             fig.canvas.blit(fig.bbox)
 
             # Write frame

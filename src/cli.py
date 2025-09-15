@@ -106,6 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
     plots.add_argument("--left", type=int, default=250)
     plots.add_argument("--right", type=int, default=250)
     plots.add_argument("--ratio", type=float, default=1.0)
+    plots.add_argument("--xaxis", choices=("frames", "seconds", "absolute"), default="frames")
     # plot style
     plots.add_argument("--style", choices=("line", "bar"), default="line")
     plots.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
@@ -199,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render.add_argument("--left", type=int, default=250)
     render.add_argument("--right", type=int, default=250)
+    render.add_argument("--xaxis", choices=("frames", "seconds", "absolute"), default="seconds")
     render.add_argument("--style", choices=("line", "bar"), default="line")
     render.add_argument("--bar-mode", choices=("grouped", "stacked"), default="grouped")
     render.add_argument("--bar-agg", choices=("instant", "mean", "max"), default="instant")
@@ -250,7 +252,10 @@ def cmd_plots(args: argparse.Namespace) -> int:
     C = sig.shape[1]
 
     # Defaults for labels
-    xlabel = args.xlabel if args.xlabel is not None else "Time (frames)"
+    if args.xlabel is not None:
+        xlabel = args.xlabel
+    else:
+        xlabel = "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
     default_ylabel = "Percentage in ROI" if is_roi else "Value"
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)
@@ -260,6 +265,7 @@ def cmd_plots(args: argparse.Namespace) -> int:
         ratio=float(args.ratio),
         output_dir=args.output,
         mode=args.mode,
+        xaxis=args.xaxis,
         style=args.style,
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
@@ -350,7 +356,10 @@ def cmd_render(args: argparse.Namespace) -> int:
 
     # Defaults for labels & legend
     C = aligned.shape[1] if aligned.ndim == 2 else 1
-    xlabel = args.xlabel if args.xlabel is not None else "Time (frames)"
+    if args.xlabel is not None:
+        xlabel = args.xlabel
+    else:
+        xlabel = "Time (s)" if args.xaxis in ("seconds", "absolute") else "Time (frames)"
     default_ylabel = "Percentage in ROI" if is_roi else "Value"
     ylabel = args.ylabel if args.ylabel is not None else default_ylabel
     show_legend = _compute_legend(args.legend, args.mode, C)
@@ -360,6 +369,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         ratio=float(args.ratio),
         output_dir=plots_dir,
         mode=args.mode,
+        xaxis=args.xaxis,
         style=args.style,
         grid=tuple(args.grid) if args.grid is not None else None,
         col_names=col_names,
