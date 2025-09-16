@@ -3,16 +3,16 @@
 This project, `chronoviz`, is a Python tool for visualizing time series data synchronized with video. It is designed for high-performance offline rendering, using Matplotlib and FFmpeg to create synchronized visualizations of long recordings. The roadmap includes plans for a CLI, GPU acceleration, real-time streaming, and interactive playback.
 
 The core pipeline consists of:
-1.  **Alignment**: Reading time series data (from CSV or HDF5) and aligning it with the video's timeline. This is handled in `src/alignment.py`.
-2.  **Plotting**: Generating plot videos from the aligned time series data using a sliding window approach. This is done in `src/plotting.py` with `matplotlib` as the current backend.
-3.  **Combining**: Merging the original video with the generated plot videos using `ffmpeg`. This is managed by `src/combine.py`, which is GPU-aware for better performance.
+1.  **Alignment**: Reading time series data (from CSV or HDF5) and aligning it with the video's timeline. This is handled in `chronoviz/alignment.py`.
+2.  **Plotting**: Generating plot videos from the aligned time series data using a sliding window approach. This is done in `chronoviz/plotting.py` with `matplotlib` as the current backend.
+3.  **Combining**: Merging the original video with the generated plot videos using `ffmpeg`. This is managed by `chronoviz/combine.py`, which is GPU-aware for better performance.
 
 ## Building and Running
 
 The project uses `uv` for dependency management.
 
 Prerequisites
-- Python 3.12+
+- Python 3.10+
 - FFmpeg + FFprobe on PATH (`ffmpeg`, `ffprobe`)
 - `uv` installed
 

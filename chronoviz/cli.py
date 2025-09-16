@@ -86,6 +86,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--signals-key", type=str, default=None, help="Dataset key for HDF5"
     )
     plots.add_argument(
+        "--time-col",
+        type=str,
+        default=None,
+        help="Column name for time values (CSV/HDF5)",
+    )
+    plots.add_argument(
+        "--time-key",
+        type=str,
+        default=None,
+        help="HDF5 dataset key for time values (raw HDF5)",
+    )
+    plots.add_argument(
+        "--time-units",
+        type=str,
+        choices=("s", "ms", "us", "ns"),
+        default="s",
+        help="Units for time values (default: seconds)",
+    )
+    plots.add_argument(
         "-o",
         "--output",
         type=Path,
@@ -203,6 +222,25 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         "--signals-key", type=str, default=None, help="HDF5 dataset key"
     )
+    render.add_argument(
+        "--time-col",
+        type=str,
+        default=None,
+        help="Column name for time values (CSV/HDF5)",
+    )
+    render.add_argument(
+        "--time-key",
+        type=str,
+        default=None,
+        help="HDF5 dataset key for time values (raw HDF5)",
+    )
+    render.add_argument(
+        "--time-units",
+        type=str,
+        choices=("s", "ms", "us", "ns"),
+        default="s",
+        help="Units for time values (default: seconds)",
+    )
     render.add_argument("--align-mode", choices=("resample", "pad"), default="resample")
     render.add_argument("--padding-mode", type=str, default="edge")
     render.add_argument("--ratio", type=float, default=1.0)
@@ -278,7 +316,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def cmd_plots(args: argparse.Namespace) -> int:
     _ensure_tools(need_ffmpeg=True, need_ffprobe=False, quiet=args.quiet)
-    df = read_timeseries(args.signals, key=args.signals_key)
+    df, _times = read_timeseries(
+        args.signals,
+        key=args.signals_key,
+        time_col=args.time_col,
+        time_key=args.time_key,
+        time_units=args.time_units,
+    )
     sig, col_names, is_roi = _infer_signal_and_columns(df)
     sig = np.asarray(sig)
     if sig.ndim == 1:
@@ -380,7 +424,13 @@ def cmd_render(args: argparse.Namespace) -> int:
     video_fps, n_frames, video_times = get_video_timeline(args.video)
     base_fps = float(args.fps) if args.fps is not None else float(video_fps)
 
-    df = read_timeseries(args.signals, key=args.signals_key)
+    df, times = read_timeseries(
+        args.signals,
+        key=args.signals_key,
+        time_col=args.time_col,
+        time_key=args.time_key,
+        time_units=args.time_units,
+    )
     sig, col_names, is_roi = _infer_signal_and_columns(df)
 
     aligned = align_signal_cfr(
@@ -389,6 +439,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         mode=args.align_mode,
         ratio=float(args.ratio),
         padding_mode=args.padding_mode,
+        times=times,
     )
 
     plots_dir = args.plots_output
@@ -412,7 +463,9 @@ def cmd_render(args: argparse.Namespace) -> int:
     show_legend = _compute_legend(args.legend, args.mode, C)
 
     # Convert left/right for render
-    plot_fps = float(base_fps) * float(args.ratio)
+    # If explicit times are provided, ignore ratio for plotting to keep duration exact
+    plot_ratio = 1.0 if times is not None else float(args.ratio)
+    plot_fps = float(base_fps) * plot_ratio
     if args.xaxis in ("seconds", "absolute"):
         left_samples = int(round(float(args.left) * plot_fps))
         right_samples = int(round(float(args.right) * plot_fps))
@@ -422,7 +475,7 @@ def cmd_render(args: argparse.Namespace) -> int:
 
     plot_path = generate_plot_videos(
         aligned_signal=aligned,
-        ratio=float(args.ratio),
+        ratio=plot_ratio,
         output_dir=plots_dir,
         mode=args.mode,
         xaxis=args.xaxis,

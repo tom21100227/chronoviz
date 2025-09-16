@@ -16,7 +16,7 @@ What’s included
 ## Quickstart
 
 Prerequisites
-- Python 3.12+
+- Python 3.10+
 - FFmpeg and FFprobe on PATH (`ffmpeg`, `ffprobe`)
 - uv (recommended) or pip
 
@@ -44,8 +44,24 @@ chronoviz combine -v /path/to/video.mp4 -P /tmp/plots/signals_plot_grid.mp4 -o /
 chronoviz render -v /path/to/video.mp4 -s /path/to/data.csv -o /tmp/final.mp4 -m grid --grid 6 1 --ylim 0 100 -c
 ```
 
+4) Render with explicit timestamps in CSV (time column in seconds)
+```
+chronoviz render -v /path/to/video.mp4 -s /path/to/data.csv \
+  --time-col time --time-units s \
+  -o /tmp/final_time_aligned.mp4 -m combine -c
+```
+
+5) Render with explicit timestamps in raw HDF5 (separate datasets)
+```
+chronoviz render -v /path/to/video.mp4 -s /path/to/data.h5 \
+  --signals-key signals --time-key times --time-units ms \
+  -o /tmp/final_time_aligned.mp4 -m grid --grid 3 2 -c
+```
+
 Notes
 - ROI CSVs with columns `frame, roi_name, percentage_in_roi` are auto‑pivoted to wide format. For HDF5, pass `--signals-key`.
+- Time columns/keys: for explicit sample times, pass `--time-col <col>` (CSV/HDF5) or `--time-key <key>` (raw HDF5) and optional `--time-units {s,ms,us,ns}`; alignment will interpolate onto the video timeline.
+- When explicit times are provided, plotting uses the base video FPS (ratio is ignored for plotting) so plot duration matches the video exactly.
 - Corner positions (`tr`, `tl`, `br`, `bl`) require `--overlay`. Use `-a/--alpha` for transparency.
 - Use `-c/--cpu` to force CPU paths (deterministic, broadly compatible). GPU paths are auto‑detected when available.
 - Auto legend: enabled by default for `-m combine` when channel count ≤ 10. Use `-l/--legend` to force on or `--no-legend` to force off.
@@ -66,10 +82,10 @@ Lint/format
 - `black .`
 
 Project layout
-- `src/alignment.py` — read and align signals to video timeline
-- `src/plotting.py` — generate plot video(s) using Matplotlib
-- `src/combine.py` — stitch base video and plots via FFmpeg (GPU‑aware)
-- `src/cli.py` — CLI entrypoint and subcommands
+- `chronoviz/alignment.py` — read and align signals to video timeline
+- `chronoviz/plotting.py` — generate plot video(s) using Matplotlib
+- `chronoviz/combine.py` — stitch base video and plots via FFmpeg (GPU‑aware)
+- `chronoviz/cli.py` — CLI entrypoint and subcommands
 - `main.py` — thin wrapper delegating to `chronoviz.cli`
 
 Roadmap
