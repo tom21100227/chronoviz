@@ -365,7 +365,7 @@ def combine_videos(
             str(output_path),
         ]
 
-    print(f"Running ffmpeg command:{" ".join(cmd)}")
+    print(f"Running ffmpeg command:{' '.join(cmd)}")
     try:
         # Run ffmpeg (inherit stdio → progress bar; raise on error)
         subprocess.run(cmd, check=True)

@@ -59,3 +59,13 @@ dev = [
 Homepage = "https://github.com/tom21100227/chronoviz"
 Repository = "https://github.com/tom21100227/chronoviz"
 Issues = "https://github.com/tom21100227/chronoviz/issues"
+
+[tool.ruff]
+exclude = [
+  "notebooks",
+]
+
+[tool.ruff.lint]
+ignore = [
+  "F841", # local variable assigned but never used
+]

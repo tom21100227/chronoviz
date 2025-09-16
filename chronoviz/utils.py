@@ -3,6 +3,7 @@ from __future__ import annotations
 import platform
 import subprocess
 import shutil
+from dataclasses import dataclass
 import numpy as np
 from numba import njit
 from typing import Optional, Tuple, List
@@ -193,9 +194,6 @@ def clamp_nan_2d(sig, lo, hi):
                     sig[i, c] = hi - 0.01
                 elif v <= lo:
                     sig[i, c] = lo + 0.01
-
-
-from dataclasses import dataclass
 
 
 @dataclass
