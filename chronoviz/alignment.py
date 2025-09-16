@@ -2,6 +2,8 @@
 Module for aligning time series signals to video frame timelines.
 """
 
+from __future__ import annotations
+
 import av
 import pathlib
 import numpy as np

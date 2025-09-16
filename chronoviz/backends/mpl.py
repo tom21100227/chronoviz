@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from ..utils import _compute_ylim, clamp_nan_2d
 from ..writers import FrameWriter, create_ffmpeg_writer

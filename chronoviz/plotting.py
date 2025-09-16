@@ -6,8 +6,8 @@ import numpy as np
 import warnings
 from pathlib import Path
 from typing import Optional
-from src.utils import _global_ylim
-from src.backends.mpl import (
+from .utils import _global_ylim
+from .backends.mpl import (
     render_one_channel,
     render_all_channels,
     render_grid,

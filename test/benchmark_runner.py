@@ -15,8 +15,8 @@ import sys
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
-from src.plotting import generate_plot_videos
-from src.alignment import align_signal_cfr
+from chronoviz.plotting import generate_plot_videos
+from chronoviz.alignment import align_signal_cfr
 
 
 def generate_sine_waves(n_samples, n_channels=1, frequencies=None, noise_level=0.0):

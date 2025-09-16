@@ -2,6 +2,8 @@
 FFmpeg-based video writer implementation.
 """
 
+from __future__ import annotations
+
 import subprocess
 import os
 from pathlib import Path

@@ -26,7 +26,7 @@ Create/refresh the environment
 
 CLI help
 - `chronoviz --help`
-- If the console script isn’t visible, use: `python -m src.cli --help` or `python main.py --help`
+- If the console script isn’t visible, use: `python -m chronoviz.cli --help` or `python main.py --help`
 
 Examples
 1) Generate plot video(s) from signals only
@@ -70,7 +70,7 @@ Project layout
 - `src/plotting.py` — generate plot video(s) using Matplotlib
 - `src/combine.py` — stitch base video and plots via FFmpeg (GPU‑aware)
 - `src/cli.py` — CLI entrypoint and subcommands
-- `main.py` — thin wrapper delegating to `src.cli`
+- `main.py` — thin wrapper delegating to `chronoviz.cli`
 
 Roadmap
 - [ ] Real‑time/interactive playback modes

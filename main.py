@@ -1,4 +1,4 @@
-from src.cli import cli_main
+from chronoviz.cli import cli_main
 
 
 if __name__ == "__main__":

@@ -17,8 +17,8 @@ from contextlib import contextmanager
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
-from src.plotting import generate_plot_videos
-from src.alignment import align_signal_cfr
+from chronoviz.plotting import generate_plot_videos
+from chronoviz.alignment import align_signal_cfr
 
 # Import data generators
 from test_data_generators import generate_sine_waves, generate_complex_waveform

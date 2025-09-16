@@ -12,7 +12,7 @@ import shutil
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
-from src.plotting import generate_plot_videos
+from chronoviz.plotting import generate_plot_videos
 from test_data_generators import (
     generate_sine_waves,
     generate_complex_waveform,

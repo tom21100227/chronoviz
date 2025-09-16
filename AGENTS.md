@@ -36,7 +36,7 @@ Run via CLI (preferred)
   ```
 
 Fallback (module or script)
-- `python -m src.cli --help`
+- `python -m chronoviz.cli --help`
 - `python main.py --help`
 
 Notes

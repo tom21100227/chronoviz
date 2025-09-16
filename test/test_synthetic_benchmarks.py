@@ -20,8 +20,8 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.plotting import generate_plot_videos
-from src.alignment import align_signal_cfr
+from chronoviz.plotting import generate_plot_videos
+from chronoviz.alignment import align_signal_cfr
 
 
 # Synthetic data generators

@@ -7,6 +7,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from . import __version__
 from .alignment import read_timeseries, get_video_timeline, align_signal_cfr
 from .plotting import generate_plot_videos
 from .combine import combine_videos
@@ -67,6 +68,7 @@ def _ensure_tools(
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="chronoviz", description="ChronoViz CLI")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     p.add_argument(
         "-q", "--quiet", action="store_true", help="Suppress non-error output"
     )
